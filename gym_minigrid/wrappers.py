@@ -99,6 +99,26 @@ class StateBonus(gym.core.Wrapper):
     def reset(self, **kwargs):
         return self.env.reset(**kwargs)
 
+class FixedGoalReward(gym.core.Wrapper):
+    """
+    Always reward 1 for reaching goal, and small negative 
+    reward for intermediate steps
+    """
+
+    def __init__(self, env):
+        super().__init__(env)
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        if reward > 0:
+            if not done:
+                raise NotImplementedError('Expecting non-zero reward only if done')
+            reward = 1.
+        else:
+            # Consistent with minigrid._reward()
+            reward = - 0.9 / self.env.max_steps 
+        return obs, reward, done, info
+
 class ImgObsWrapper(gym.core.ObservationWrapper):
     """
     Use the image as the only observation output, no language/mission.
