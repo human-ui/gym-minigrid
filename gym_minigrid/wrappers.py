@@ -179,6 +179,35 @@ class FullyObsWrapper(gym.core.ObservationWrapper):
 
         return full_grid
 
+class FullyObsOneHotWrapper(gym.core.ObservationWrapper):
+    """
+    Fully observable gridworld using a one-hot grid encoding
+    """
+
+    def __init__(self, env):
+        super().__init__(env)
+        self._maxObjectId = 9
+        self.__dict__.update(vars(env))  # hack to pass values to super wrapper
+        self.observation_space = spaces.Box(
+            low=0,
+            high=1,
+            shape=(self.env.width, self.env.height, self._maxObjectId + 1 + 4),  # number of cells
+            dtype='uint8'
+        )
+
+    def observation(self, obs):
+        # Just take object ID part, ignore color and state
+        full_grid = self.env.grid.encode()[:,:,0]
+        one_hot = np.zeros(self.observation_space.shape)
+        # TODO: there must be more more efficient way to convert this
+        for i in range(self.env.width):
+            for j in range(self.env.height):
+                one_hot[i][j][full_grid[i][j]] = 1
+        # Mark agent position as (10,11,12,13) depending on direction
+        agent_obj_id = self._maxObjectId + 1 + self.env.agent_dir
+        one_hot[self.env.agent_pos[0]][self.env.agent_pos[1]][agent_obj_id] = 1
+        return one_hot
+
 class FlatObsWrapper(gym.core.ObservationWrapper):
     """
     Encode mission strings using a one-hot scheme,
