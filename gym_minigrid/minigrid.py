@@ -22,12 +22,12 @@ COLOR_NAMES = sorted(list(COLORS.keys()))
 
 # Used to map colors to integers
 COLOR_TO_IDX = {
-    'red'   : 0,
-    'green' : 1,
-    'blue'  : 2,
-    'purple': 3,
-    'yellow': 4,
-    'grey'  : 5
+    'red'   : 1,
+    'green' : 2,
+    'blue'  : 3,
+    'purple': 4,
+    'yellow': 5,
+    'grey'  : 6
 }
 
 IDX_TO_COLOR = dict(zip(COLOR_TO_IDX.values(), COLOR_TO_IDX.keys()))
