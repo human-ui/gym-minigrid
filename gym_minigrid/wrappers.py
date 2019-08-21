@@ -113,10 +113,10 @@ class FixedGoalReward(gym.core.Wrapper):
         if reward > 0:
             if not done:
                 raise NotImplementedError('Expecting non-zero reward only if done')
-            reward = 1.
+            reward = 0.
         else:
-            # Consistent with minigrid._reward()
-            reward = - 0.9 / self.env.max_steps 
+            # Standard setup - receive -1 as long as not in finish (torture:()
+            reward = -1
         return obs, reward, done, info
 
 class ImgObsWrapper(gym.core.ObservationWrapper):
