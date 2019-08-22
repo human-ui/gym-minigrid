@@ -132,6 +132,46 @@ class ImgObsWrapper(gym.core.ObservationWrapper):
     def observation(self, obs):
         return obs['image']
 
+class ImgObsOneHotWrapper(gym.core.ObservationWrapper):
+    """
+    Use the image as the only observation output, no language/mission.
+    Use one-hot encoding, rather than numeric values.
+    There are 21 channels:
+    - 11 for object (0..10)
+    - 7 for color (0..6)
+    - 3 for state (0..2)
+    """
+
+    def __init__(self, env):
+        super().__init__(env)
+
+        self._objectLen = max(OBJECT_TO_IDX.values()) + 1
+        self._colorLen = max(COLOR_TO_IDX.values()) + 1
+        self._stateLen = 3
+        self._channels = self._objectLen + self._colorLen + self._stateLen
+
+        # (7, 7, 3)
+        (w, h, c) = env.observation_space.spaces['image'].shape
+        (self._i, self._j, _) = np.unravel_index(np.arange(w * h * c), (w, h, c))
+
+        self.observation_space = spaces.Box(
+            low=0,
+            high=1,
+            shape=(w, h, self._channels), # (7, 7, 21)
+            dtype='float'
+        )
+
+
+    def observation(self, obs):
+        img = obs['image']
+        img[:,:,1] += self._objectLen
+        img[:,:,2] += self._objectLen + self._colorLen
+        k = img.reshape((-1))
+
+        one_hot = np.zeros(self.observation_space.shape)
+        one_hot[self._i, self._j, k] = 1.
+        return one_hot
+
 class RGBImgObsWrapper(gym.core.ObservationWrapper):
     """
     Wrapper to use fully observable RGB image as the only observation output,
