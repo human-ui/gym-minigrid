@@ -10,6 +10,7 @@ CELL_PIXELS = 32
 
 # Map of color names to RGB values
 COLORS = {
+    'white' : np.array([255, 255, 255]),  # used for predictions
     'red'   : np.array([255, 0, 0]),
     'green' : np.array([0, 255, 0]),
     'blue'  : np.array([0, 0, 255]),
@@ -22,6 +23,7 @@ COLOR_NAMES = sorted(list(COLORS.keys()))
 
 # Used to map colors to integers
 COLOR_TO_IDX = {
+    'white' : 0,
     'red'   : 1,
     'green' : 2,
     'blue'  : 3,
@@ -1254,7 +1256,7 @@ class MiniGridEnv(gym.Env):
 
         r.endFrame()
 
-        return r.getPixmap()
+        return r.getArray()
 
     def render(self, mode='human', close=False, highlight=True):
         """
@@ -1330,7 +1332,7 @@ class MiniGridEnv(gym.Env):
                     )
 
         r.endFrame()
-
+        
         if mode == 'rgb_array':
             return r.getArray()
         elif mode == 'pixmap':
