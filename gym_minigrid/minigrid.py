@@ -51,6 +51,13 @@ OBJECT_TO_IDX = {
 
 IDX_TO_OBJECT = dict(zip(OBJECT_TO_IDX.values(), OBJECT_TO_IDX.keys()))
 
+# Map of state names to integers
+STATE_TO_IDX = {
+    'open'  : 0,
+    'closed': 1,
+    'locked': 2,
+}
+
 # Map of agent direction indices to vectors
 DIR_TO_VEC = [
     # Pointing right (positive X)
@@ -409,17 +416,17 @@ class Grid:
         assert j >= 0 and j < self.height
         return self.grid[j * self.width + i]
 
-    def horz_wall(self, x, y, length=None):
+    def horz_wall(self, x, y, length=None, obj_type=Wall):
         if length is None:
             length = self.width - x
         for i in range(0, length):
-            self.set(x + i, y, Wall())
+            self.set(x + i, y, obj_type())
 
-    def vert_wall(self, x, y, length=None):
+    def vert_wall(self, x, y, length=None, obj_type=Wall):
         if length is None:
             length = self.height - y
         for j in range(0, length):
-            self.set(x, y + j, Wall())
+            self.set(x, y + j, obj_type())
 
     def wall_rect(self, x, y, w, h):
         self.horz_wall(x, y, w)
@@ -953,6 +960,15 @@ class MiniGridEnv(gym.Env):
 
         return pos
 
+    def put_obj(self, obj, i, j):
+        """
+        Put an object at a specific position in the grid
+        """
+
+        self.grid.set(i, j, obj)
+        obj.init_pos = (i, j)
+        obj.cur_pos = (i, j)
+
     def place_agent(
         self,
         top=None,
@@ -1215,7 +1231,7 @@ class MiniGridEnv(gym.Env):
 
         return obs
 
-    def get_obs_render(self, obs, tile_pixels=CELL_PIXELS//2):
+    def get_obs_render(self, obs, tile_size=CELL_PIXELS//2, mode='pixmap'):
         """
         Render an agent observation for visualization
         """
@@ -1223,8 +1239,8 @@ class MiniGridEnv(gym.Env):
         if self.obs_render == None:
             from gym_minigrid.rendering import Renderer
             self.obs_render = Renderer(
-                self.agent_view_size * tile_pixels,
-                self.agent_view_size * tile_pixels
+                self.agent_view_size * tile_size,
+                self.agent_view_size * tile_size
             )
 
         r = self.obs_render
@@ -1234,10 +1250,10 @@ class MiniGridEnv(gym.Env):
         grid = Grid.decode(obs)
 
         # Render the whole grid
-        grid.render(r, tile_pixels)
+        grid.render(r, tile_size)
 
         # Draw the agent
-        ratio = tile_pixels / CELL_PIXELS
+        ratio = tile_size / CELL_PIXELS
         r.push()
         r.scale(ratio, ratio)
         r.translate(
@@ -1256,9 +1272,13 @@ class MiniGridEnv(gym.Env):
 
         r.endFrame()
 
-        return r.getArray()
+        if mode == 'rgb_array':
+            return r.getArray()
+        elif mode == 'pixmap':
+            return r.getPixmap()
+        return r
 
-    def render(self, mode='human', close=False, highlight=True):
+    def render(self, mode='human', close=False, highlight=True, tile_size=CELL_PIXELS):
         """
         Render the whole-grid human view
         """
@@ -1268,11 +1288,11 @@ class MiniGridEnv(gym.Env):
                 self.grid_render.close()
             return
 
-        if self.grid_render is None or self.grid_render.window is None:
+        if self.grid_render is None or self.grid_render.window is None or (self.grid_render.width != self.width * tile_size):
             from gym_minigrid.rendering import Renderer
             self.grid_render = Renderer(
-                self.width * CELL_PIXELS,
-                self.height * CELL_PIXELS,
+                self.width * tile_size,
+                self.height * tile_size,
                 True if mode == 'human' else False
             )
 
@@ -1284,10 +1304,12 @@ class MiniGridEnv(gym.Env):
         r.beginFrame()
 
         # Render the whole grid
-        self.grid.render(r, CELL_PIXELS)
+        self.grid.render(r, tile_size)
 
         # Draw the agent
+        ratio = tile_size / CELL_PIXELS
         r.push()
+        r.scale(ratio, ratio)
         r.translate(
             CELL_PIXELS * (self.agent_pos[0] + 0.5),
             CELL_PIXELS * (self.agent_pos[1] + 0.5)
@@ -1324,10 +1346,10 @@ class MiniGridEnv(gym.Env):
 
                     # Highlight the cell
                     r.fillRect(
-                        abs_i * CELL_PIXELS,
-                        abs_j * CELL_PIXELS,
-                        CELL_PIXELS,
-                        CELL_PIXELS,
+                        abs_i * tile_size,
+                        abs_j * tile_size,
+                        tile_size,
+                        tile_size,
                         255, 255, 255, 75
                     )
 
@@ -1337,5 +1359,4 @@ class MiniGridEnv(gym.Env):
             return r.getArray()
         elif mode == 'pixmap':
             return r.getPixmap()
-
         return r

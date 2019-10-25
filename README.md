@@ -29,6 +29,8 @@ Please use this bibtex if you want to cite this repository in your publications:
 ```
 
 List of publications & submissions using MiniGrid (please open a pull request to add missing entries):
+- [Learning Effective Subgoals with Multi-Task Hierarchical Reinforcement Learning](http://surl.tirl.info/proceedings/SURL-2019_paper_10.pdf) (Tsinghua University, August 2019)
+- [Learning distant cause and effect using only local and immediate credit assignment](https://arxiv.org/abs/1905.11589) (Incubator 491, May 2019)
 - [Learning World Graphs to Accelerate Hierarchical Reinforcement Learning](https://arxiv.org/abs/1907.00664) (Salesforce Research, 2019)
 - [Modeling the Long Term Future in Model-Based Reinforcement Learning](https://openreview.net/forum?id=SkgQBn0cF7) (Mila, ICLR 2019)
 - [Practical Open-Loop Optimistic Planning](https://arxiv.org/pdf/1904.04700.pdf) (INRIA, Apr 2019)
@@ -391,6 +393,38 @@ The agent has to pick up a box which is placed in a corner of a 3x3 maze.
 The doors are locked, the keys are hidden in boxes and doors are obstructed
 by balls. This environment can be solved without relying on language.
 
+## Distributional shift environment
+
+Registered configurations:
+- `MiniGrid-DistShift1-v0`
+- `MiniGrid-DistShift2-v0`
+
+This environment is based on one of the DeepMind [AI safety gridworlds](https://github.com/deepmind/ai-safety-gridworlds).
+The agent starts in the top-left corner and must reach the goal which is in the top-right corner, but has to avoid stepping
+into lava on its way. The aim of this environment is to test an agent's ability to generalize. There are two slightly
+different variants of the environment, so that the agent can be trained on one variant and tested on the other.
+
+<p align="center">
+  <img src="figures/DistShift1.png" width="200">
+  <img src="figures/DistShift2.png" width="200">
+</p>
+
+## Lava gap environment
+
+Registered configurations:
+- `MiniGrid-LavaGapS5-v0`
+- `MiniGrid-LavaGapS6-v0`
+- `MiniGrid-LavaGapS7-v0`
+
+<p align="center">
+  <img src="figures/LavaGapS6.png" width="200">
+</p>
+
+The agent has to reach the green goal square at the opposite corner of the room,
+and must pass through a narrow gap in a vertical strip of deadly lava. Touching
+the lava terminate the episode with a zero reward. This environment is useful
+for studying safety and safe exploration.
+
 ## Lava crossing environment
 
 Registered configurations:
@@ -412,22 +446,6 @@ Each lava stream runs across the room either horizontally or vertically, and
 has a single crossing point which can be safely used;  Luckily, a path to the
 goal is guaranteed to exist. This environment is useful for studying safety and
 safe exploration.
-
-## Distributional shift environment
-
-Registered configurations:
-- `MiniGrid-DistShift1-v0`
-- `MiniGrid-DistShift2-v0`
-
-This environment is based on one of the DeepMind [AI safety gridworlds](https://github.com/deepmind/ai-safety-gridworlds).
-The agent starts in the top-left corner and must reach the goal which is in the top-right corner, but has to avoid stepping
-into lava on its way. The aim of this environment is to test an agent's ability to generalize. There are two slightly
-different variants of the environment, so that the agent can be trained on one variant and tested on the other.
-
-<p align="center">
-  <img src="figures/DistShift1.png" width="200">
-  <img src="figures/DistShift2.png" width="200">
-</p>
 
 ## Simple crossing environment
 
