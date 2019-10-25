@@ -162,7 +162,6 @@ class ImgObsOneHotWrapper(gym.core.ObservationWrapper):
             dtype='float'
         )
 
-
     def observation(self, obs):
         img = obs['image']
         img[:,:,1] += self._objectLen

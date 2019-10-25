@@ -729,6 +729,8 @@ class MiniGridEnv(gym.Env):
         self.reset()
 
     def reset(self):
+        self.last_action = None
+
         # Current position and direction of the agent
         self.agent_pos = None
         self.agent_dir = None
@@ -1111,7 +1113,7 @@ class MiniGridEnv(gym.Env):
 
     def step(self, action):
         self.step_count += 1
-
+        self.last_action = action
         reward = 0
         done = False
 
@@ -1284,28 +1286,42 @@ class MiniGridEnv(gym.Env):
         """
 
         if close:
-            if self.grid_render:
+            if self.grid_render is not None:
                 self.grid_render.close()
             return
 
-        if self.grid_render is None or self.grid_render.window is None or (self.grid_render.width != self.width * tile_size):
+        if self.grid_render is None:
             from gym_minigrid.rendering import Renderer
             self.grid_render = Renderer(
-                self.width * tile_size,
                 self.height * tile_size,
-                True if mode == 'human' else False
+                self.width * tile_size,
+                # ownWindow=True if mode == 'human' else False
             )
 
         r = self.grid_render
 
-        if r.window:
-            r.window.setText(self.mission)
+        # if r.window:
+        #     r.window.setText(self.mission)
 
         r.beginFrame()
 
         # Render the whole grid
         self.grid.render(r, tile_size)
+        self._render_agent()
+        if highlight:
+            self._render_highlight()
 
+        r.endFrame()
+        
+        if mode == 'rgb_array':
+            return r.getArray()
+        elif mode == 'pixmap':
+            return r.getPixmap()
+
+        return r
+
+    def _render_agent(self):
+        r = self.grid_render
         # Draw the agent
         ratio = tile_size / CELL_PIXELS
         r.push()
@@ -1324,6 +1340,9 @@ class MiniGridEnv(gym.Env):
         ])
         r.pop()
 
+    def _render_highlight(self):
+        r = self.grid_render
+
         # Compute which cells are visible to the agent
         _, vis_mask = self.gen_obs_grid()
 
@@ -1334,15 +1353,14 @@ class MiniGridEnv(gym.Env):
         top_left = self.agent_pos + f_vec * (self.agent_view_size-1) - r_vec * (self.agent_view_size // 2)
 
         # For each cell in the visibility mask
-        if highlight:
-            for vis_j in range(0, self.agent_view_size):
-                for vis_i in range(0, self.agent_view_size):
-                    # If this cell is not visible, don't highlight it
-                    if not vis_mask[vis_i, vis_j]:
-                        continue
+        for vis_j in range(0, self.agent_view_size):
+            for vis_i in range(0, self.agent_view_size):
+                # If this cell is not visible, don't highlight it
+                if not vis_mask[vis_i, vis_j]:
+                    continue
 
-                    # Compute the world coordinates of this cell
-                    abs_i, abs_j = top_left - (f_vec * vis_j) + (r_vec * vis_i)
+                # Compute the world coordinates of this cell
+                abs_i, abs_j = top_left - (f_vec * vis_j) + (r_vec * vis_i)
 
                     # Highlight the cell
                     r.fillRect(

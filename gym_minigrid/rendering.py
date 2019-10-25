@@ -1,102 +1,15 @@
 import numpy as np
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap, QPainter, QColor, QPolygon
 from PyQt5.QtCore import QPoint, QSize, QRect
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QTextEdit
 from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, QFrame
 
-class Window(QMainWindow):
-    """
-    Simple application window to render the environment into
-    """
 
-    def __init__(self):
-        super().__init__()
+class Renderer(object):
 
-        self.setWindowTitle('MiniGrid Gym Environment')
-
-        # Image label to display the rendering
-        self.imgLabel = QLabel()
-        self.imgLabel.setFrameStyle(QFrame.Panel | QFrame.Sunken)
-
-        # Text box for the mission
-        self.missionBox = QTextEdit()
-        self.missionBox.setReadOnly(True)
-        self.missionBox.setMinimumSize(400, 100)
-
-        # Center the image
-        hbox = QHBoxLayout()
-        hbox.addStretch(1)
-        hbox.addWidget(self.imgLabel)
-        hbox.addStretch(1)
-
-        # Arrange widgets vertically
-        vbox = QVBoxLayout()
-        vbox.addLayout(hbox)
-        vbox.addWidget(self.missionBox)
-
-        # Create a main widget for the window
-        mainWidget = QWidget(self)
-        self.setCentralWidget(mainWidget)
-        mainWidget.setLayout(vbox)
-
-        # Show the application window
-        self.show()
-        self.setFocus()
-
-        self.closed = False
-
-        # Callback for keyboard events
-        self.keyDownCb = None
-
-    def closeEvent(self, event):
-        self.closed = True
-
-    def setPixmap(self, pixmap):
-        self.imgLabel.setPixmap(pixmap)
-
-    def setText(self, text):
-        self.missionBox.setPlainText(text)
-
-    def setKeyDownCb(self, callback):
-        self.keyDownCb = callback
-
-    def keyPressEvent(self, e):
-        if self.keyDownCb == None:
-            return
-
-        keyName = None
-        if e.key() == Qt.Key_Left:
-            keyName = 'LEFT'
-        elif e.key() == Qt.Key_Right:
-            keyName = 'RIGHT'
-        elif e.key() == Qt.Key_Up:
-            keyName = 'UP'
-        elif e.key() == Qt.Key_Down:
-            keyName = 'DOWN'
-        elif e.key() == Qt.Key_Space:
-            keyName = 'SPACE'
-        elif e.key() == Qt.Key_Return:
-            keyName = 'RETURN'
-        elif e.key() == Qt.Key_Alt:
-            keyName = 'ALT'
-        elif e.key() == Qt.Key_Control:
-            keyName = 'CTRL'
-        elif e.key() == Qt.Key_PageUp:
-            keyName = 'PAGE_UP'
-        elif e.key() == Qt.Key_PageDown:
-            keyName = 'PAGE_DOWN'
-        elif e.key() == Qt.Key_Backspace:
-            keyName = 'BACKSPACE'
-        elif e.key() == Qt.Key_Escape:
-            keyName = 'ESCAPE'
-
-        if keyName == None:
-            return
-        self.keyDownCb(keyName)
-
-class Renderer:
-    def __init__(self, width, height, ownWindow=False):
+    def __init__(self, width, height):
         self.width = width
         self.height = height
 
@@ -104,9 +17,9 @@ class Renderer:
         self.painter = QPainter()
 
         self.window = None
-        if ownWindow:
-            self.app = QApplication([])
-            self.window = Window()
+        # if ownWindow:
+        # self.app = QApplication([])
+        # self.window = Window()
 
     def close(self):
         """
@@ -125,12 +38,12 @@ class Renderer:
     def endFrame(self):
         self.painter.end()
 
-        if self.window:
-            if self.window.closed:
-                self.window = None
-            else:
-                self.window.setPixmap(self.getPixmap())
-                self.app.processEvents()
+        # if self.window:
+        #     if self.window.closed:
+        #         self.window = None
+        #     else:
+        #         self.window.setPixmap(self.getPixmap())
+        #         self.app.processEvents()
 
     def getPixmap(self):
         return QPixmap.fromImage(self.img)
