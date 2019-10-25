@@ -1307,9 +1307,9 @@ class MiniGridEnv(gym.Env):
 
         # Render the whole grid
         self.grid.render(r, tile_size)
-        self._render_agent()
+        self._render_agent(CELL_PIXELS)
         if highlight:
-            self._render_highlight()
+            self._render_highlight(CELL_PIXELS)
 
         r.endFrame()
         
@@ -1320,7 +1320,7 @@ class MiniGridEnv(gym.Env):
 
         return r
 
-    def _render_agent(self):
+    def _render_agent(self, tile_size):
         r = self.grid_render
         # Draw the agent
         ratio = tile_size / CELL_PIXELS
@@ -1340,7 +1340,7 @@ class MiniGridEnv(gym.Env):
         ])
         r.pop()
 
-    def _render_highlight(self):
+    def _render_highlight(self, tile_size):
         r = self.grid_render
 
         # Compute which cells are visible to the agent
@@ -1362,19 +1362,13 @@ class MiniGridEnv(gym.Env):
                 # Compute the world coordinates of this cell
                 abs_i, abs_j = top_left - (f_vec * vis_j) + (r_vec * vis_i)
 
-                    # Highlight the cell
-                    r.fillRect(
-                        abs_i * tile_size,
-                        abs_j * tile_size,
-                        tile_size,
-                        tile_size,
-                        255, 255, 255, 75
-                    )
+                # Highlight the cell
+                r.fillRect(
+                    abs_i * tile_size,
+                    abs_j * tile_size,
+                    tile_size,
+                    tile_size,
+                    255, 255, 255, 75
+                )
 
         r.endFrame()
-        
-        if mode == 'rgb_array':
-            return r.getArray()
-        elif mode == 'pixmap':
-            return r.getPixmap()
-        return r
