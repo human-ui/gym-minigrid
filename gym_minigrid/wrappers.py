@@ -142,10 +142,12 @@ class ImgObsOneHotWrapper(gym.core.ObservationWrapper):
     - 3 for state (0..2)
     """
 
-    def __init__(self, env):
+    def __init__(self, env, omit_agent_channel=False):
         super().__init__(env)
 
         self._objectLen = max(OBJECT_TO_IDX.values()) + 1
+        if omit_agent_channel:
+            self._objectLen -= 1
         self._colorLen = max(COLOR_TO_IDX.values()) + 1
         self._stateLen = 3
         self._channels = self._objectLen + self._colorLen + self._stateLen
