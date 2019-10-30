@@ -828,6 +828,114 @@ class MiniGridEnv(gym.Env):
 
         return str
 
+    def draw(self, screen, pos=(0,0)):
+        """
+        Produce a pretty string of the environment's grid along with the agent.
+        """
+
+        # Map of object types to short string
+        OBJECT_TO_STR = {
+            'wall': '\u2588',
+            'floor': ' ',
+            'door': {
+                'open': '\u2337',
+                'closed': '\u2338',
+                'locked': '\u236F'
+                },
+            'key': '\u2642',
+            'ball': '\u25CF',
+            'box': '\u25EB',
+            'goal': '\u2612',
+            'lava': '\u2591',
+        }
+
+        # Map agent's direction to short string
+        AGENT_DIR_TO_STR = {
+            0: '\u25B6',  # right
+            1: '\u25BC',  # down
+            2: '\u25C0',  # left
+            3: '\u25B2'   # up
+        }
+
+        # define background color
+        curses.start_color()
+        curses.init_color(0, 300, 300, 300)  # background black-ish
+        # curses.init_color(1, 1000, 1000, 1000)  # white
+        curses.init_pair(1, 0, 0)
+        screen.bkgd(' ', curses.color_pair(1))
+
+        # define highlight colors
+        h = .75
+        high_bg = int(1000 * (1 - h))
+        
+        curses.init_color(2, 0, 0, 0)  # black
+        curses.init_pair(2, 2, 2)
+        curses.init_color(3, high_bg, high_bg, high_bg)  # highlighted gray
+        curses.init_pair(3, 3, 3)
+
+        # define object colors
+        colors = {'black': curses.color_pair(2)}
+        colors_highlight = {'black': curses.color_pair(3)}
+        for idx, (color, (r, g, b)) in enumerate(COLORS.items()):
+            cidx = 2 * idx + 4
+            curses.init_color(cidx,
+                              int(r / 255 * 1000),
+                              int(g / 255 * 1000),
+                              int(b / 255 * 1000))
+            curses.init_pair(cidx, cidx, 2)
+            colors[color] = curses.color_pair(cidx)
+
+            curses.init_color(cidx + 1,
+                              int(r / 255 * 1000 * h + high_bg),
+                              int(g / 255 * 1000 * h + high_bg),
+                              int(b / 255 * 1000 * h + high_bg))
+            curses.init_pair(cidx + 1, cidx + 1, 3)
+            colors_highlight[color] = curses.color_pair(cidx + 1)
+
+        # determine what agent can see
+        _, vis_mask = self.gen_obs_grid()
+        f_vec = self.dir_vec
+        r_vec = self.right_vec
+        top_left = self.agent_pos + f_vec * (self.agent_view_size-1) - r_vec * (self.agent_view_size // 2)
+
+        to_highlight = []
+        for vis_j in range(0, self.agent_view_size):
+            for vis_i in range(0, self.agent_view_size):
+                if vis_mask[vis_i, vis_j]:
+                    # Compute the world coordinates of this cell
+                    abs_i, abs_j = top_left - (f_vec * vis_j) + (r_vec * vis_i)
+                    to_highlight.append((abs_i, abs_j))
+
+        # draw grid
+        for j in range(self.grid.height):
+            for i in range(self.grid.width):
+
+                if i == self.agent_pos[0] and j == self.agent_pos[1]:
+                    rep = AGENT_DIR_TO_STR[self.agent_dir]
+                    color = 'red'
+                else:
+                    c = self.grid.get(i, j)
+
+                    if c == None:
+                        rep = ' '
+                        color = 'black'
+                    else:
+                        rep = OBJECT_TO_STR[c.type]
+                        color = c.color
+                        if c.type == 'door':
+                            if c.is_open:
+                                rep = rep['open']
+                            elif c.is_locked:
+                                rep = rep['locked']
+                            else:
+                                rep = rep['closed']
+
+                if (i, j) in to_highlight:
+                    color = colors_highlight[color]
+                else:
+                    color = colors[color]
+                screen.addstr(j + pos[1], i + pos[0], rep, color)
+
     def _gen_grid(self, width, height):
         assert False, "_gen_grid needs to be implemented by each environment"
 
