@@ -1,4 +1,4 @@
-import math
+import math, curses
 import gym
 from enum import IntEnum
 import numpy as np
@@ -1403,13 +1403,9 @@ class MiniGridEnv(gym.Env):
             self.grid_render = Renderer(
                 self.height * tile_size,
                 self.width * tile_size,
-                # ownWindow=True if mode == 'human' else False
             )
 
         r = self.grid_render
-
-        # if r.window:
-        #     r.window.setText(self.mission)
 
         r.beginFrame()
 
@@ -1478,5 +1474,3 @@ class MiniGridEnv(gym.Env):
                     tile_size,
                     255, 255, 255, 75
                 )
-
-        r.endFrame()
