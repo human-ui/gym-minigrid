@@ -1,34 +1,34 @@
-from .minigrid import *
+from gym_minigrid.minigrid import Cell, Grid, MiniGridEnv
+from gym_minigrid.entities import Ball, Box, Door, Key, OBJECT_COLORS, make
 
-def reject_next_to(env, pos):
+
+def _reject_next_to(env, pos):
     """
     Function to filter out object positions that are right next to
     the agent's starting point
     """
 
-    sx, sy = env.agent_pos
-    x, y = pos
-    d = abs(sx - x) + abs(sy - y)
+    si, sj = env.agent.pos
+    i, j = pos
+    d = abs(si - i) + abs(sj - j)
     return d < 2
 
-class Room:
-    def __init__(
-        self,
-        top,
-        size
-    ):
+
+class Room(object):
+
+    def __init__(self, top, size):
         # Top-left corner and size (tuples)
         self.top = top
         self.size = size
 
         # List of door objects and door positions
         # Order of the doors is right, down, left, up
-        self.doors = [None] * 4
-        self.door_pos = [None] * 4
+        self.doors = {'right': None, 'down': None, 'left': None, 'up': None}
+        self.door_pos = {'right': None, 'down': None, 'left': None, 'up': None}
 
         # List of rooms adjacent to this one
         # Order of the neighbors is right, down, left, up
-        self.neighbors = [None] * 4
+        self.neighbors = {'right': None, 'down': None, 'left': None, 'up': None}
 
         # Indicates if this room is behind a locked door
         self.locked = False
@@ -36,35 +36,13 @@ class Room:
         # List of objects contained
         self.objs = []
 
-    def rand_pos(self, env):
-        topX, topY = self.top
-        sizeX, sizeY = self.size
-        return env._randPos(
-            topX + 1, topX + sizeX - 1,
-            topY + 1, topY + sizeY - 1
-        )
-
-    def pos_inside(self, x, y):
-        """
-        Check if a position is within the bounds of this room
-        """
-
-        topX, topY = self.top
-        sizeX, sizeY = self.size
-
-        if x < topX or y < topY:
-            return False
-
-        if x >= topX + sizeX or y >= topY + sizeY:
-            return False
-
-        return True
 
 class RoomGrid(MiniGridEnv):
     """
     Environment with multiple rooms and random objects.
     This is meant to serve as a base class for other environments.
     """
+    ORIENTATIONS = ['right', 'down', 'left', 'up']
 
     def __init__(
         self,
@@ -96,219 +74,204 @@ class RoomGrid(MiniGridEnv):
             seed=seed
         )
 
-    def room_from_pos(self, x, y):
+    def room_from_pos(self, i, j):
         """Get the room a given position maps to"""
 
-        assert x >= 0
-        assert y >= 0
+        assert i >= 0
+        assert j >= 0
 
-        i = x // (self.room_size-1)
-        j = y // (self.room_size-1)
+        i //= (self.room_size - 1)
+        j //= (self.room_size - 1)
 
-        assert i < self.num_cols
-        assert j < self.num_rows
+        assert i < self.num_rows
+        assert j < self.num_cols
 
-        return self.room_grid[j][i]
+        return self.room_grid[i][j]
 
-    def get_room(self, i, j):
-        assert i < self.num_cols
-        assert j < self.num_rows
-        return self.room_grid[j][i]
-
-    def _gen_grid(self, width, height):
+    def _gen_grid(self, height, width):
         # Create the grid
-        self.grid = Grid(width, height)
+        self.grid = Grid(height, width)
 
         self.room_grid = []
 
         # For each row of rooms
-        for j in range(0, self.num_rows):
+        for i in range(0, self.num_rows):
             row = []
 
             # For each column of rooms
-            for i in range(0, self.num_cols):
+            for j in range(0, self.num_cols):
                 room = Room(
-                    (i * (self.room_size-1), j * (self.room_size-1)),
+                    (i * (self.room_size - 1), j * (self.room_size - 1)),
                     (self.room_size, self.room_size)
                 )
                 row.append(room)
 
                 # Generate the walls for this room
-                self.grid.wall_rect(*room.top, *room.size)
+                self.wall_rect(*room.top, *room.size)
 
             self.room_grid.append(row)
 
         # For each row of rooms
-        for j in range(0, self.num_rows):
+        for i in range(0, self.num_rows):
             # For each column of rooms
-            for i in range(0, self.num_cols):
-                room = self.room_grid[j][i]
+            for j in range(0, self.num_cols):
+                room = self.room_grid[i][j]
 
-                x_l, y_l = (room.top[0] + 1, room.top[1] + 1)
-                x_m, y_m = (room.top[0] + room.size[0] - 1, room.top[1] + room.size[1] - 1)
+                i_l, j_l = (room.top[0] + 1, room.top[1] + 1)
+                i_m, j_m = (room.top[0] + room.size[0] - 1, room.top[1] + room.size[1] - 1)
 
-                # Door positions, order is right, down, left, up
-                if i < self.num_cols - 1:
-                    room.neighbors[0] = self.room_grid[j][i+1]
-                    room.door_pos[0] = (x_m, self._rand_int(y_l, y_m))
-                if j < self.num_rows - 1:
-                    room.neighbors[1] = self.room_grid[j+1][i]
-                    room.door_pos[1] = (self._rand_int(x_l, x_m), y_m)
-                if i > 0:
-                    room.neighbors[2] = self.room_grid[j][i-1]
-                    room.door_pos[2] = room.neighbors[2].door_pos[0]
+                # Door positions
+                if j < self.num_cols - 1:
+                    room.neighbors['right'] = self.room_grid[i][j + 1]
+                    room.door_pos['right'] = (self.rng.randint(i_l, i_m), j_m)
+                if i < self.num_rows - 1:
+                    room.neighbors['down'] = self.room_grid[i + 1][j]
+                    room.door_pos['down'] = (i_m, self.rng.randint(j_l, j_m))
                 if j > 0:
-                    room.neighbors[3] = self.room_grid[j-1][i]
-                    room.door_pos[3] = room.neighbors[3].door_pos[1]
+                    room.neighbors['left'] = self.room_grid[i][j - 1]
+                    room.door_pos['left'] = room.neighbors['left'].door_pos['right']
+                if i > 0:
+                    room.neighbors['up'] = self.room_grid[i - 1][j]
+                    room.door_pos['up'] = room.neighbors['up'].door_pos['down']
 
         # The agent starts in the middle, facing right
-        self.agent_pos = (
-            (self.num_cols // 2) * (self.room_size-1) + (self.room_size // 2),
-            (self.num_rows // 2) * (self.room_size-1) + (self.room_size // 2)
+        self.agent.pos = (
+            (self.num_rows // 2) * (self.room_size - 1) + (self.room_size // 2),
+            (self.num_cols // 2) * (self.room_size - 1) + (self.room_size // 2)
         )
-        self.agent_dir = 0
+        self.agent.state = 'right'
 
     def place_in_room(self, i, j, obj):
         """
         Add an existing object to room (i, j)
         """
-
-        room = self.get_room(i, j)
-
-        pos = self.place_obj(
+        room = self.room_grid[i][j]
+        self.place_obj(
             obj,
             room.top,
             room.size,
-            reject_fn=reject_next_to,
+            reject_fn=_reject_next_to,
             max_tries=1000
         )
-
         room.objs.append(obj)
-
-        return obj, pos
 
     def add_object(self, i, j, kind=None, color=None):
         """
         Add a new object to room (i, j)
         """
-
-        if kind == None:
-            kind = self._rand_elem(['key', 'ball', 'box'])
-
-        if color == None:
-            color = self._rand_color()
-
-        # TODO: we probably want to add an Object.make helper function
-        assert kind in ['key', 'ball', 'box']
-        if kind == 'key':
-            obj = Key(color)
-        elif kind == 'ball':
-            obj = Ball(color)
-        elif kind == 'box':
-            obj = Box(color)
-
-        return self.place_in_room(i, j, obj)
+        if kind is None:
+            kind = self.rng.choice(['key', 'ball', 'box'])
+        if color is None:
+            color = self.rng.choice(OBJECT_COLORS)
+        obj = make(kind, color)
+        self.place_in_room(i, j, obj)
+        return obj
 
     def add_door(self, i, j, door_idx=None, color=None, locked=None):
         """
         Add a door to a room, connecting it to a neighbor
         """
 
-        room = self.get_room(i, j)
+        room = self.room_grid[i][j]
 
-        if door_idx == None:
+        if door_idx is None:
             # Need to make sure that there is a neighbor along this wall
             # and that there is not already a door
             while True:
-                door_idx = self._rand_int(0, 4)
+                door_idx = self.rng.choice(self.ORIENTATIONS)
                 if room.neighbors[door_idx] and room.doors[door_idx] is None:
                     break
 
-        if color == None:
-            color = self._rand_color()
+        if room.doors[door_idx] is not None:
+            raise IndexError(f'door {door_idx} already exists')
+
+        if color is None:
+            color = self.rng.choice(OBJECT_COLORS)
 
         if locked is None:
-            locked = self._rand_bool()
-
-        assert room.doors[door_idx] is None, "door already exists"
+            locked = self.rng.rand() > .5
 
         room.locked = locked
-        door = Door(color, is_locked=locked)
+        door = Door(color, state='locked' if locked else 'closed')
 
         pos = room.door_pos[door_idx]
-        self.grid.set(*pos, door)
-        door.cur_pos = pos
+        self.grid[pos] = door
 
-        neighbor = room.neighbors[door_idx]
         room.doors[door_idx] = door
-        neighbor.doors[(door_idx+2) % 4] = door
+        room.neighbors[door_idx].doors[self._door_idx(door_idx, 2)] = door
 
-        return door, pos
+        return door
+
+    def _door_idx(self, door_idx, offset):
+        idx = self.ORIENTATIONS.index(door_idx)
+        door_idx = self.ORIENTATIONS[(idx + offset) % len(self.ORIENTATIONS)]
+        return door_idx
 
     def remove_wall(self, i, j, wall_idx):
         """
         Remove a wall between two rooms
         """
+        room = self.room_grid[i][j]
 
-        room = self.get_room(i, j)
-
-        assert wall_idx >= 0 and wall_idx < 4
-        assert room.doors[wall_idx] is None, "door exists on this wall"
-        assert room.neighbors[wall_idx], "invalid wall"
+        if room.doors[wall_idx] is not None:
+            raise ValueError('door exists on this wall')
+        if not room.neighbors[wall_idx]:
+            raise ValueError(f'invalid wall: {wall_idx}')
 
         neighbor = room.neighbors[wall_idx]
 
-        tx, ty = room.top
+        ti, tj = room.top
         w, h = room.size
 
         # Ordering of walls is right, down, left, up
-        if wall_idx == 0:
+        if wall_idx == 'right':
             for i in range(1, h - 1):
-                self.grid.set(tx + w - 1, ty + i, None)
-        elif wall_idx == 1:
-            for i in range(1, w - 1):
-                self.grid.set(tx + i, ty + h - 1, None)
-        elif wall_idx == 2:
+                self.grid[ti + i, tj + w - 1].clear()
+        elif wall_idx == 'down':
+            for j in range(1, w - 1):
+                self.grid[ti + h - 1, tj + j].clear()
+        elif wall_idx == 'left':
             for i in range(1, h - 1):
-                self.grid.set(tx, ty + i, None)
-        elif wall_idx == 3:
-            for i in range(1, w - 1):
-                self.grid.set(tx + i, ty, None)
+                self.grid[ti + i, tj].clear()
+        elif wall_idx == 'up':
+            for j in range(1, w - 1):
+                self.grid[ti, tj + j].clear()
         else:
-            assert False, "invalid wall index"
+            raise ValueError(f'invalid wall: {wall_idx}')
 
         # Mark the rooms as connected
         room.doors[wall_idx] = True
-        neighbor.doors[(wall_idx+2) % 4] = True
+        neighbor.doors[self._door_idx(wall_idx, 2)] = True
 
     def place_agent(self, i=None, j=None, rand_dir=True):
         """
         Place the agent in a room
         """
 
-        if i == None:
-            i = self._rand_int(0, self.num_cols)
-        if j == None:
-            j = self._rand_int(0, self.num_rows)
+        if i is None:
+            i = self.rng.randint(self.num_rows)
+        if j is None:
+            j = self.rng.randint(self.num_cols)
 
-        room = self.room_grid[j][i]
+        room = self.room_grid[i][j]
 
         # Find a position that is not right in front of an object
         while True:
-            super().place_agent(room.top, room.size, rand_dir, max_tries=1000)
-            front_cell = self.grid.get(*self.front_pos)
-            if front_cell is None or front_cell.type is 'wall':
+            super().place_agent(top=room.top, size=room.size, rand_dir=rand_dir, max_tries=1000)
+            front_cell = self.grid[self.agent.front_pos]
+            if front_cell.entity is None or front_cell.entity.type == 'wall':
                 break
+            else:
+                self.grid[self.agent.pos].clear()
 
-        return self.agent_pos
+        return self.agent.pos
 
-    def connect_all(self, door_colors=COLOR_NAMES, max_itrs=5000):
+    def connect_all(self, door_colors=OBJECT_COLORS, max_itrs=5000):
         """
         Make sure that all rooms are reachable by the agent from its
         starting position
         """
-
-        start_room = self.room_from_pos(*self.agent_pos)
+        start_room = self.room_from_pos(*self.agent.pos)
 
         added_doors = []
 
@@ -320,9 +283,9 @@ class RoomGrid(MiniGridEnv):
                 if room in reach:
                     continue
                 reach.add(room)
-                for i in range(0, 4):
-                    if room.doors[i]:
-                        stack.append(room.neighbors[i])
+                for ori in self.ORIENTATIONS:
+                    if room.doors[ori]:
+                        stack.append(room.neighbors[ori])
             return reach
 
         num_itrs = 0
@@ -340,10 +303,10 @@ class RoomGrid(MiniGridEnv):
                 break
 
             # Pick a random room and door position
-            i = self._rand_int(0, self.num_cols)
-            j = self._rand_int(0, self.num_rows)
-            k = self._rand_int(0, 4)
-            room = self.get_room(i, j)
+            i = self.rng.randint(0, self.num_rows)
+            j = self.rng.randint(0, self.num_cols)
+            k = self.rng.choice(self.ORIENTATIONS)
+            room = self.room_grid[i][j]
 
             # If there is already a door there, skip
             if not room.door_pos[k] or room.doors[k]:
@@ -352,8 +315,8 @@ class RoomGrid(MiniGridEnv):
             if room.locked or room.neighbors[k].locked:
                 continue
 
-            color = self._rand_elem(door_colors)
-            door, _ = self.add_door(i, j, k, color, False)
+            color = self.rng.choice(door_colors)
+            door = self.add_door(i, j, k, color, False)
             added_doors.append(door)
 
         return added_doors
@@ -362,7 +325,7 @@ class RoomGrid(MiniGridEnv):
         """
         Add random objects that can potentially distract/confuse the agent.
         """
-
+        raise NotImplementedError
         # Collect a list of existing objects
         objs = []
         for row in self.room_grid:
@@ -374,8 +337,8 @@ class RoomGrid(MiniGridEnv):
         dists = []
 
         while len(dists) < num_distractors:
-            color = self._rand_elem(COLOR_NAMES)
-            type = self._rand_elem(['key', 'ball', 'box'])
+            color = self.rng.choice(OBJECT_COLORS)
+            type = self.rng.choice(['key', 'ball', 'box'])
             obj = (type, color)
 
             if all_unique and obj in objs:
@@ -384,10 +347,10 @@ class RoomGrid(MiniGridEnv):
             # Add the object to a random room if no room specified
             room_i = i
             room_j = j
-            if room_i == None:
-                room_i = self._rand_int(0, self.num_cols)
-            if room_j == None:
-                room_j = self._rand_int(0, self.num_rows)
+            if room_i is None:
+                room_i = self.rng.randint(0, self.num_rows)
+            if room_j is None:
+                room_j = self.rng.randint(0, self.num_cols)
 
             dist, pos = self.add_object(room_i, room_j, *obj)
 

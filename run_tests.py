@@ -1,26 +1,21 @@
-#!/usr/bin/env python3
-
-import random
 import numpy as np
 import gym
-from gym_minigrid.register import env_list
-from gym_minigrid.minigrid import Grid, OBJECT_TO_IDX
 
-# Test specifically importing a specific environment
-from gym_minigrid.envs import DoorKeyEnv
+from gym_minigrid.minigrid import Grid
+from gym_minigrid import wrappers
 
-# Test importing wrappers
-from gym_minigrid.wrappers import *
+rng = np.random.RandomState(1337)
 
-##############################################################################
-
-print('%d environments registered' % len(env_list))
+env_list = [e for e in gym.envs.registry.env_specs if e.startswith('MiniGrid')]
+print(f'{len(env_list)} environments registered')
 
 for env_name in env_list:
-    print('testing "%s"' % env_name)
+    print(f'testing {env_name}')
 
     # Load the gym environment
-    env = gym.make(env_name)
+    env = gym.make(env_name, seed=1337)
+    print(env)
+
     env.max_steps = min(env.max_steps, 200)
     env.reset()
     env.render('rgb_array')
@@ -40,22 +35,18 @@ for env_name in env_list:
     num_episodes = 0
     while num_episodes < 5:
         # Pick a random action
-        action = random.randint(0, env.action_space.n - 1)
+        action = rng.randint(0, env.action_space.n)
 
         obs, reward, done, info = env.step(action)
 
         # Validate the agent position
-        assert env.agent_pos[0] < env.width
-        assert env.agent_pos[1] < env.height
+        assert env.agent.pos[0] < env.height
+        assert env.agent.pos[1] < env.width
 
         # Test observation encode/decode roundtrip
         img = obs['image']
-        vis_mask = img[:, :, 0] != OBJECT_TO_IDX['unseen']  # hackish
-        img2 = Grid.decode(img).encode(vis_mask=vis_mask)
+        img2 = Grid.decode(img).encode()  # mask=img[4])
         assert np.array_equal(img, img2)
-
-        # Test the env to string function
-        str(env)
 
         # Check that the reward is within the specified range
         assert reward >= env.reward_range[0], reward
@@ -70,75 +61,59 @@ for env_name in env_list:
     # Test the close method
     env.close()
 
-    env = gym.make(env_name)
-    env = ReseedWrapper(env)
+    env = gym.make(env_name, seed=1337)
+    env = wrappers.ReseedWrapper(env)
     for _ in range(10):
         env.reset()
         env.step(0)
         env.close()
 
-    env = gym.make(env_name)
-    env = ImgObsWrapper(env)
+    env = gym.make(env_name, seed=1337)
+    env = wrappers.ImgObsWrapper(env)
     env.reset()
     env.step(0)
     env.close()
 
     # Test the fully observable wrapper
-    env = gym.make(env_name)
-    env = FullyObsWrapper(env)
+    env = gym.make(env_name, seed=1337)
+    env = wrappers.FullyObsWrapper(env)
     env.reset()
     obs, _, _, _ = env.step(0)
     assert obs['image'].shape == env.observation_space.spaces['image'].shape
     env.close()
 
-    env = gym.make(env_name)
-    env = FlatObsWrapper(env)
+    env = gym.make(env_name, seed=1337)
+    env = wrappers.FlatObsWrapper(env)
     env.reset()
     env.step(0)
     env.close()
 
-    env = gym.make(env_name)
-    env = ViewSizeWrapper(env, 5)
+    env = gym.make(env_name, seed=1337)
+    env = wrappers.ViewSizeWrapper(env, 5)
     env.reset()
     env.step(0)
     env.close()
 
     # Test the wrappers return proper observation spaces.
-    wrappers = [
-        RGBImgObsWrapper,
-        RGBImgPartialObsWrapper,
-        OneHotPartialObsWrapper
+    wrapper_list = [
+        wrappers.RGBImgObsWrapper,
+        wrappers.RGBImgPartialObsWrapper,
+        wrappers.OneHotPartialObsWrapper
     ]
-    for wrapper in wrappers:
-        env = wrapper(gym.make(env_name))
+    for wrapper in wrapper_list:
+        env = wrapper(gym.make(env_name, seed=1337))
         obs_space, wrapper_name = env.observation_space, wrapper.__name__
         assert isinstance(
-            obs_space, spaces.Dict
-        ), "Observation space for {0} is not a Dict: {1}.".format(
-            wrapper_name, obs_space
-        )
-        # this shuld not fail either
-        ImgObsWrapper(env)
+            obs_space, gym.spaces.Dict
+        ), f'Observation space for {wrapper_name} is not a Dict: {obs_space}.'
 
-##############################################################################
+        # this should not fail either
+        wrappers.ImgObsWrapper(env)
 
-print('testing agent_sees method')
-env = gym.make('MiniGrid-DoorKey-6x6-v0')
-goal_pos = (env.grid.width - 2, env.grid.height - 2)
 
-# Test the "in" operator on grid objects
+print('testing the in method')
+env = gym.make('MiniGrid-DoorKey-v1', seed=1337)
+goal_pos = (env.grid.shape[0] - 2, env.grid.shape[1] - 2)
+
 assert ('green', 'goal') in env.grid
 assert ('blue', 'key') not in env.grid
-
-# Test the env.agent_sees() function
-env.reset()
-for i in range(0, 500):
-    action = random.randint(0, env.action_space.n - 1)
-    obs, reward, done, info = env.step(action)
-    goal_visible = ('green', 'goal') in Grid.decode(obs['image'])
-    agent_sees_goal = env.agent_sees(*goal_pos)
-    assert agent_sees_goal == goal_visible
-    if done:
-        env.reset()
-
-#############################################################################

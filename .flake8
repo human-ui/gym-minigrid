@@ -1,0 +1,14 @@
+[flake8]
+# E123: closing bracket does not match indentation of opening bracket's line
+# ignored because autoformatter fails to fix it anyways
+# E126: continuation line over-indented for hanging indent
+# ignored because autoformatter fails to fix it anyways
+# E231: missing whitespace after ‘,’, ‘;’, or ‘:’
+# ignored because it doesn't make sense when slicing and in numpy arrays
+# E401: Put imports on separate lines.
+# ignored because that's not always the best idea
+# E402: Fix module level import not at top of file
+# ignored because there are sometimes imports after sys.path.insert
+# E501: line too long ( > 79 characters)
+# ignored because screens are no longer limited to few characters
+ignore = E123,E126,E231,E401,E402,E501

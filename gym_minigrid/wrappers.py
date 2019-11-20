@@ -4,9 +4,9 @@ from functools import reduce
 
 import numpy as np
 import gym
-from gym import error, spaces, utils
-from .minigrid import OBJECT_TO_IDX, COLOR_TO_IDX, STATE_TO_IDX
-from .minigrid import CELL_PIXELS
+from gym import spaces
+from gym_minigrid import entities
+
 
 class ReseedWrapper(gym.core.Wrapper):
     """
@@ -30,6 +30,7 @@ class ReseedWrapper(gym.core.Wrapper):
         obs, reward, done, info = self.env.step(action)
         return obs, reward, done, info
 
+
 class ActionBonus(gym.core.Wrapper):
     """
     Wrapper which adds an exploration bonus.
@@ -45,7 +46,7 @@ class ActionBonus(gym.core.Wrapper):
         obs, reward, done, info = self.env.step(action)
 
         env = self.unwrapped
-        tup = (tuple(env.agent_pos), env.agent_dir, action)
+        tup = (tuple(env.agent.pos), env.agent.state, action)
 
         # Get the count for this (s,a) pair
         pre_count = 0
@@ -64,6 +65,7 @@ class ActionBonus(gym.core.Wrapper):
     def reset(self, **kwargs):
         return self.env.reset(**kwargs)
 
+
 class StateBonus(gym.core.Wrapper):
     """
     Adds an exploration bonus based on which positions
@@ -80,7 +82,7 @@ class StateBonus(gym.core.Wrapper):
         # Tuple based on which we index the counts
         # We use the position after an update
         env = self.unwrapped
-        tup = (tuple(env.agent_pos))
+        tup = (tuple(env.agent.pos))
 
         # Get the count for this key
         pre_count = 0
@@ -99,9 +101,10 @@ class StateBonus(gym.core.Wrapper):
     def reset(self, **kwargs):
         return self.env.reset(**kwargs)
 
+
 class FixedGoalReward(gym.core.Wrapper):
     """
-    Always reward 1 for reaching goal, and small negative 
+    Always reward 1 for reaching goal, and small negative
     reward for intermediate steps
     """
 
@@ -119,6 +122,7 @@ class FixedGoalReward(gym.core.Wrapper):
             reward = -1
         return obs, reward, done, info
 
+
 class ImgObsWrapper(gym.core.ObservationWrapper):
     """
     Use the image as the only observation output, no language/mission.
@@ -129,7 +133,8 @@ class ImgObsWrapper(gym.core.ObservationWrapper):
         self.observation_space = env.observation_space.spaces['image']
 
     def observation(self, obs):
-        return obs['image']
+        return obs['image'][:3]
+
 
 class ImgObsOneHotWrapper(gym.core.ObservationWrapper):
     """
@@ -144,33 +149,35 @@ class ImgObsOneHotWrapper(gym.core.ObservationWrapper):
     def __init__(self, env, omit_agent_channel=False):
         super().__init__(env)
 
-        self._objectLen = max(OBJECT_TO_IDX.values()) + 1
+        self._objectLen = len(entities.ENTITIES)
         if omit_agent_channel:
             self._objectLen -= 1
-        self._colorLen = max(COLOR_TO_IDX.values()) + 1
+        self._colorLen = len(entities.OBJECT_COLORS)
         self._stateLen = 3
         self._channels = self._objectLen + self._colorLen + self._stateLen
+        breakpoint()
 
-        # (7, 7, 3)
-        (w, h, c) = env.observation_space.spaces['image'].shape
-        (self._i, self._j, _) = np.unravel_index(np.arange(w * h * c), (w, h, c))
+        # (3, 7, 7)
+        c, w, h = env.observation_space.spaces['image'].shape
+        self._i, self._j, _ = np.unravel_index(np.arange(c * w * h), (c, w, h))
 
         self.observation_space = spaces.Box(
             low=0,
             high=1,
-            shape=(w, h, self._channels), # (7, 7, 21)
+            shape=(self._channels, w, h),  # (21, 7, 7)
             dtype='float'
         )
 
     def observation(self, obs):
         img = obs['image']
-        img[:,:,1] += self._objectLen
-        img[:,:,2] += self._objectLen + self._colorLen
+        img[1,:,:] += self._objectLen
+        img[2,:,:] += self._objectLen + self._colorLen
         k = img.reshape((-1))
 
         one_hot = np.zeros(self.observation_space.shape)
-        one_hot[self._i, self._j, k] = 1.
+        one_hot[k, self._i, self._j] = 1
         return one_hot
+
 
 class OneHotPartialObsWrapper(gym.core.ObservationWrapper):
     """
@@ -186,12 +193,12 @@ class OneHotPartialObsWrapper(gym.core.ObservationWrapper):
         obs_shape = env.observation_space['image'].shape
 
         # Number of bits per cell
-        num_bits = len(OBJECT_TO_IDX) + len(COLOR_TO_IDX) + len(STATE_TO_IDX)
+        num_bits = len(entities.ENTITIES) + len(entities.OBJECT_COLORS) + 3
 
-        self.observation_space.spaces["image"] = spaces.Box(
+        self.observation_space.spaces['image'] = spaces.Box(
             low=0,
             high=255,
-            shape=(obs_shape[0], obs_shape[1], num_bits),
+            shape=(num_bits, obs_shape[0], obs_shape[1]),
             dtype='uint8'
         )
 
@@ -201,18 +208,19 @@ class OneHotPartialObsWrapper(gym.core.ObservationWrapper):
 
         for i in range(img.shape[0]):
             for j in range(img.shape[1]):
-                type = img[i, j, 0]
-                color = img[i, j, 1]
-                state = img[i, j, 2]
+                type_ = img[0, i, j]
+                color = img[1, i, j]
+                state = img[2, i, j]
 
-                out[i, j, type] = 1
-                out[i, j, len(OBJECT_TO_IDX) + color] = 1
-                out[i, j, len(OBJECT_TO_IDX) + len(COLOR_TO_IDX) + state] = 1
+                out[type_, i, j] = 1
+                out[len(entities.ENTITIES) + color, i, j] = 1
+                out[len(entities.ENTITIES) + len(entities.COLORS) + state, i, j] = 1
 
         return {
             'mission': obs['mission'],
             'image': out
         }
+
 
 class RGBImgObsWrapper(gym.core.ObservationWrapper):
     """
@@ -229,19 +237,13 @@ class RGBImgObsWrapper(gym.core.ObservationWrapper):
         self.observation_space.spaces['image'] = spaces.Box(
             low=0,
             high=255,
-            shape=(self.env.width*tile_size, self.env.height*tile_size, 3),
+            shape=(3, self.env.width * tile_size, self.env.height * tile_size),
             dtype='uint8'
         )
 
     def observation(self, obs):
         env = self.unwrapped
-
-        rgb_img = env.render(
-            mode='rgb_array',
-            highlight=False,
-            tile_size=self.tile_size
-        )
-
+        rgb_img = env.render(mode='rgb_array', highlight=False)
         return {
             'mission': obs['mission'],
             'image': rgb_img
@@ -263,7 +265,7 @@ class RGBImgPartialObsWrapper(gym.core.ObservationWrapper):
         self.observation_space.spaces['image'] = spaces.Box(
             low=0,
             high=255,
-            shape=(obs_shape[0] * tile_size, obs_shape[1] * tile_size, 3),
+            shape=(3, obs_shape[0] * tile_size, obs_shape[1] * tile_size),
             dtype='uint8'
         )
 
@@ -271,7 +273,7 @@ class RGBImgPartialObsWrapper(gym.core.ObservationWrapper):
         env = self.unwrapped
 
         rgb_img_partial = env.get_obs_render(
-            obs['image'],
+            obs['image'][:3],
             tile_size=self.tile_size,
             mode='rgb_array'
         )
@@ -281,6 +283,7 @@ class RGBImgPartialObsWrapper(gym.core.ObservationWrapper):
             'image': rgb_img_partial
         }
 
+
 class FullyObsWrapper(gym.core.ObservationWrapper):
     """
     Fully observable gridworld using a compact grid encoding
@@ -289,26 +292,28 @@ class FullyObsWrapper(gym.core.ObservationWrapper):
     def __init__(self, env):
         super().__init__(env)
 
-        self.observation_space.spaces["image"] = spaces.Box(
+        self.observation_space.spaces['image'] = spaces.Box(
             low=0,
             high=255,
-            shape=(self.env.width, self.env.height, 3),  # number of cells
+            shape=(3, self.env.height, self.env.width),  # number of cells
             dtype='uint8'
         )
 
     def observation(self, obs):
         env = self.unwrapped
-        full_grid = env.grid.encode()
-        full_grid[env.agent_pos[0]][env.agent_pos[1]] = np.array([
-            OBJECT_TO_IDX['agent'],
-            COLOR_TO_IDX['red'],
-            env.agent_dir
+        full_grid = env.grid.encode()[:3]
+        full_grid[:, env.agent.pos[0], env.agent.pos[1]] = np.array([
+            entities.ENTITIES.index('agent'),
+            entities.COLORS.index('red'),
+            env.agent.dir,
+            # entities.COLORS.index('black')
         ])
 
         return {
             'mission': obs['mission'],
             'image': full_grid
         }
+
 
 class FullyObsOneHotWrapper(gym.core.ObservationWrapper):
     """
@@ -317,27 +322,29 @@ class FullyObsOneHotWrapper(gym.core.ObservationWrapper):
 
     def __init__(self, env):
         super().__init__(env)
-        self._maxObjectId = 9
+        self._maxObjectId = len(entities.ENTITIES)
         self.__dict__.update(vars(env))  # hack to pass values to super wrapper
         self.observation_space = spaces.Box(
             low=0,
             high=1,
-            shape=(self.env.width, self.env.height, self._maxObjectId + 1 + 4),  # number of cells
+            shape=(self._maxObjectId + 1 + 4, self.env.height, self.env.width),
             dtype='uint8'
         )
 
     def observation(self, obs):
         # Just take object ID part, ignore color and state
-        full_grid = self.env.grid.encode()[:,:,0]
+        full_grid = self.env.grid.encode()[0]
         one_hot = np.zeros(self.observation_space.shape)
         # TODO: there must be more more efficient way to convert this
-        for i in range(self.env.width):
-            for j in range(self.env.height):
-                one_hot[i][j][full_grid[i][j]] = 1
+        for i in range(self.env.height):
+            for j in range(self.env.width):
+                one_hot[i, j][full_grid[i, j]] = 1
         # Mark agent position as (10,11,12,13) depending on direction
-        agent_obj_id = self._maxObjectId + 1 + self.env.agent_dir
-        one_hot[self.env.agent_pos[0]][self.env.agent_pos[1]][agent_obj_id] = 1
+        agent_idx = self.env.agent.dir
+        agent_obj_id = self._maxObjectId + 1 + agent_idx
+        one_hot[self.env.agent.pos[0], self.env.agent.pos[1]][agent_obj_id] = 1
         return one_hot
+
 
 class FlatObsWrapper(gym.core.ObservationWrapper):
     """
@@ -365,7 +372,7 @@ class FlatObsWrapper(gym.core.ObservationWrapper):
         self.cachedArray = None
 
     def observation(self, obs):
-        image = obs['image']
+        image = obs['image'][:3]
         mission = obs['mission']
 
         # Cache the last-encoded mission string
@@ -390,6 +397,7 @@ class FlatObsWrapper(gym.core.ObservationWrapper):
 
         return obs
 
+
 class ViewSizeWrapper(gym.core.Wrapper):
     """
     Wrapper to customize the agent field of view size.
@@ -406,7 +414,7 @@ class ViewSizeWrapper(gym.core.Wrapper):
         observation_space = gym.spaces.Box(
             low=0,
             high=255,
-            shape=(agent_view_size, agent_view_size, 3),
+            shape=(3, agent_view_size, agent_view_size),
             dtype='uint8'
         )
 
