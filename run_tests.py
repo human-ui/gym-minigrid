@@ -1,7 +1,6 @@
 import numpy as np
 import gym
 
-from gym_minigrid.minigrid import Grid
 from gym_minigrid import wrappers
 
 rng = np.random.RandomState(1337)
@@ -45,7 +44,7 @@ for env_name in env_list:
 
         # Test observation encode/decode roundtrip
         img = obs['image']
-        img2 = Grid.decode(img).encode()  # mask=img[4])
+        img2 = env.decode(img).encode()
         assert np.array_equal(img, img2)
 
         # Check that the reward is within the specified range
@@ -94,11 +93,16 @@ for env_name in env_list:
     env.step(0)
     env.close()
 
+    env = gym.make(env_name, seed=1337)
+    env = wrappers.ImgObsOneHotWrapper(env)
+    env.reset()
+    env.step(0)
+    env.close()
+
     # Test the wrappers return proper observation spaces.
     wrapper_list = [
         wrappers.RGBImgObsWrapper,
         wrappers.RGBImgPartialObsWrapper,
-        wrappers.OneHotPartialObsWrapper
     ]
     for wrapper in wrapper_list:
         env = wrapper(gym.make(env_name, seed=1337))

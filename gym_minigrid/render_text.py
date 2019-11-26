@@ -3,8 +3,6 @@ import sty
 
 import numpy as np
 
-from gym_minigrid.entities import COLORS, ENTITIES
-
 
 class ASCII(object):
 
@@ -113,7 +111,7 @@ class ANSI(ASCII):
 
     def __call__(self):
         output = ''
-        mask = self.env.mask()
+        mask = self.env.visible()
         for pos, cell in np.ndenumerate(self.env.grid):
             bright = mask[pos]
 

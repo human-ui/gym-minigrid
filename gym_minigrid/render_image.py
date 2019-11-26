@@ -1,5 +1,7 @@
+import sys
 import numpy as np
 
+from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QImage, QPixmap, QPainter, QColor, QPolygon, QTransform
 from PyQt5.QtCore import QPoint, QRect
 
@@ -41,8 +43,8 @@ class Renderer(object):
         self.env = env
         self.highlight = highlight
         self.cell_pixels = cell_pixels
-        self.height = self.env.height * self.cell_pixels
-        self.width = self.env.width * self.cell_pixels
+        self.height = self.env.shape[0] * self.cell_pixels
+        self.width = self.env.shape[1] * self.cell_pixels
 
         self.img = QImage(self.width, self.height, QImage.Format_RGB888)
         self.painter = QPainter()
@@ -138,7 +140,10 @@ class Renderer(object):
 class MiniGridImage(Renderer):
 
     def show(self):
-        window.Window(env=self.env, renderer=self)
+        app = QApplication([])
+        win = window.Window(env=self.env, renderer=self)
+        win.show()
+        sys.exit(app.exec_())
 
     def array(self):
         self._render()
@@ -153,17 +158,17 @@ class MiniGridImage(Renderer):
 
         # draw default background
         self.setColor(*COLORS['black'])
-        self.drawRect(0, 0, self.height - 1, self.width - 1)
+        self.drawRect(0, 0, 32 * self.env.shape[0], 32 * self.env.shape[1])
 
         # draw gridlines
         self.setLineColor(*COLORS['grey'])
         self.setLineWidth(1)
-        for i in range(self.env.height):
-            self.drawLine(32 * i, 0, 32 * i, 32 * self.env.width)
-        for j in range(self.env.width):
-            self.drawLine(0, 32 * j, 32 * self.env.height, 32 * j)
+        for i in range(self.env.shape[0]):
+            self.drawLine(32 * i, 0, 32 * i, 32 * self.env.shape[1])
+        for j in range(self.env.shape[1]):
+            self.drawLine(0, 32 * j, 32 * self.env.shape[0], 32 * j)
 
-        mask = self.env.mask()
+        mask = self.env.visible()
         for pos, cell in np.ndenumerate(self.env.grid):
             with self:
                 if cell.color != 'black':
@@ -185,7 +190,7 @@ class MiniGridImage(Renderer):
 
         with self:
             self._setup(self.env.agent.pos, self.env.agent.color)
-            self.agent(self.env.agent)
+            self.agent()
 
         if self.highlight:
             self.highlight_cell(self.env.agent.pos)
@@ -217,9 +222,9 @@ class MiniGridImage(Renderer):
         super().translate(32 * i, 32 * j)
 
     @draw
-    def agent(self, agent):
+    def agent(self):
         self.translate(.5, .5)
-        self.rotate(-90 * agent.dir)
+        self.rotate(-90 * self.env.agent.dir)
         self.drawPolygon([
             (-10, -12),
             (0, 12),

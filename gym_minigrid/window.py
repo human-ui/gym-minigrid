@@ -11,22 +11,19 @@ class Window(QMainWindow):
     """
 
     KEYS = {
-        Qt.Key_Left: 'LEFT',
-        Qt.Key_Right: 'RIGHT',
-        Qt.Key_Up: 'UP',
-        Qt.Key_Down: 'DOWN',
-        Qt.Key_Space: 'SPACE',
-        Qt.Key_Return: 'RETURN',
-        Qt.Key_Alt: 'ALT',
-        Qt.Key_Control: 'CTRL',
-        Qt.Key_PageUp: 'PAGE_UP',
-        Qt.Key_PageDown: 'PAGE_DOWN',
-        Qt.Key_Backspace: 'BACKSPACE',
-        Qt.Key_Escape: 'ESCAPE'
+        Qt.Key_Left: 'left',
+        Qt.Key_Right: 'right',
+        Qt.Key_Up: 'forward',
+        Qt.Key_Space: 'toggle',
+        Qt.Key_PageUp: 'pickup',
+        Qt.Key_PageDown: 'drop',
+        Qt.Key_Return: 'done',
+        Qt.Key_Backspace: 'reset',
+        Qt.Key_Escape: 'done'
     }
 
     def __init__(self, env, renderer):
-        self.app = QApplication([])
+
         super().__init__()
 
         self.env = env
@@ -42,6 +39,8 @@ class Window(QMainWindow):
         self.missionBox = QTextEdit()
         self.missionBox.setReadOnly(True)
         self.missionBox.setMinimumSize(400, 100)
+
+        self.setText(self.env.mission)
 
         # Center the image
         hbox = QHBoxLayout()
@@ -59,16 +58,10 @@ class Window(QMainWindow):
         self.setCentralWidget(mainWidget)
         mainWidget.setLayout(vbox)
 
-        self.setText(self.env.mission)
+    def show(self):
         self.render()
-
-        # Show the application window
-        self.show()
+        super().show()
         self.setFocus()
-        sys.exit(self.app.exec_())
-
-    def processEvents(self):
-        self.app.processEvents()
 
     def setPixmap(self, pixmap):
         self.imgLabel.setPixmap(pixmap)
@@ -77,53 +70,37 @@ class Window(QMainWindow):
         self.missionBox.setPlainText(text)
 
     def keyPressEvent(self, e):
-        keyName = self.KEYS.get(e.key())
-        if keyName is None:
+        action = self.KEYS.get(e.key())
+        if action is None:
             return
-        self.keyDownCb(keyName)
+        self.keyDownCb(action)
+
+    def reset(self):
+        self.env.reset()
+        self.setText(self.env.mission)
 
     def render(self):
         self.setPixmap(self.renderer.pixmap())
-        self.processEvents()
+        QApplication.processEvents()
 
-    def keyDownCb(self, keyName):
-        if keyName == 'BACKSPACE':
-            self.env.reset()
-            self.setText(self.env.mission)
+    def keyDownCb(self, action):
+        if action == 'reset':
+            self.reset()
             print(self.env)
             self.render()
             return
 
-        if keyName == 'ESCAPE':
+        if action == 'done':
             sys.exit(0)
 
-        action = 0
+        try:
+            action_idx = self.env.actions.index(action)
+        except ValueError:
+            print(f'unknown action {action}')
 
-        if keyName == 'LEFT':
-            action = self.env.actions.index('left')
-        elif keyName == 'RIGHT':
-            action = self.env.actions.index('right')
-        elif keyName == 'UP':
-            action = self.env.actions.index('forward')
-
-        elif keyName == 'SPACE':
-            action = self.env.actions.index('toggle')
-        elif keyName == 'PAGE_UP':
-            action = self.env.actions.index('pickup')
-        elif keyName == 'PAGE_DOWN':
-            action = self.env.actions.index('drop')
-
-        elif keyName == 'RETURN':
-            action = self.env.actions.index('done')
-
-        else:
-            print('unknown key %s' % keyName)
-            return
-
-        _, _, done, _ = self.env.step(action)
+        _, _, done, _ = self.env.step(action_idx)
 
         if done:
-            self.env.reset()
-            self.setText(self.env.mission)
+            self.reset()
         self.render()
         return action
