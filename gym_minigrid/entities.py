@@ -4,8 +4,7 @@ import numpy as np
 OBJECTS = ['wall', 'door', 'key', 'ball', 'box', 'goal', 'lava']
 ENTITIES = [None] + OBJECTS + ['agent']
 # Allowed object colors
-COLORS = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'grey']
-OBJECT_COLORS = COLORS[1:]
+COLORS = ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'grey']
 
 
 class Entity(object):
@@ -23,21 +22,13 @@ class Entity(object):
         self.state = state
 
     def __str__(self):
-        return f'{self.type}: {self.color}, state: {self.state}, at {self.pos}'
+        return f'{self.type}: {self.color}, state: {self.state}'  # , at {self.pos}'
 
     def to_array(self):
         return np.array([self.type, self.color, self.state])
 
     def to_idx_array(self):
-        if hasattr(self, 'STATES'):
-            state_idx = self.STATES.index(self.state)
-        else:
-            state_idx = 0
-        return np.array([
-            ENTITIES.index(self.type),
-            COLORS.index(self.color),
-            state_idx
-        ])
+        raise NotImplementedError
 
 
 class Agent(Entity):
@@ -49,6 +40,7 @@ class Agent(Entity):
         super().__init__('agent', color, state)
         # Number of cells (width and height) in the agent view
         self.view_size = view_size
+        self.visited = set()
 
     def reset(self):
         # Item picked up, being carried
@@ -75,6 +67,7 @@ class Agent(Entity):
     @pos.setter
     def pos(self, pos):
         self._pos = pos
+        self.visited.add(pos)
 
     @property
     def dir(self):
@@ -126,7 +119,7 @@ class Agent(Entity):
         bottom_i = top_i + self.view_size
         bottom_j = top_j + self.view_size
 
-        return top_i, top_j, bottom_i, bottom_j
+        return slice(top_i, bottom_i), slice(top_j, bottom_j)
 
 
 class WorldObj(Entity):
@@ -137,7 +130,7 @@ class WorldObj(Entity):
     def __init__(self, type, color, state=None):
         super().__init__(type, color, state=state)
         self.contains = None
-        self.pos = None
+        # self.pos = None
 
     def to_idx_array(self):
         if hasattr(self, 'STATES'):
@@ -145,7 +138,7 @@ class WorldObj(Entity):
         else:
             state_idx = 0
         return np.array([
-            OBJECTS.index(self.type),
+            OBJECTS.index(self.type) + 1,  # 0 is reserved for empty
             COLORS.index(self.color),
             state_idx
         ])
@@ -255,9 +248,9 @@ class Box(WorldObj):
     def toggle(self, env, pos):
         # Replace the box by its contents
         if self.contains is None:
-            env.grid[pos].clear()
+            env[pos].clear()
         else:
-            env.grid[pos] = self.contains
+            env[pos] = self.contains
         return True
 
 
