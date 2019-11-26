@@ -1,5 +1,5 @@
 from gym_minigrid.minigrid import Cell, Grid, MiniGridEnv
-from gym_minigrid.entities import Ball, Box, Door, Key, OBJECT_COLORS, make
+from gym_minigrid.entities import Ball, Box, Door, Key, COLORS, make
 
 
 def _reject_next_to(env, pos):
@@ -162,7 +162,7 @@ class RoomGrid(MiniGridEnv):
         if kind is None:
             kind = self.rng.choice(['key', 'ball', 'box'])
         if color is None:
-            color = self.rng.choice(OBJECT_COLORS)
+            color = self.rng.choice(COLORS)
         obj = make(kind, color)
         self.place_in_room(i, j, obj)
         return obj
@@ -186,7 +186,7 @@ class RoomGrid(MiniGridEnv):
             raise IndexError(f'door {door_idx} already exists')
 
         if color is None:
-            color = self.rng.choice(OBJECT_COLORS)
+            color = self.rng.choice(COLORS)
 
         if locked is None:
             locked = self.rng.rand() > .5
@@ -195,7 +195,7 @@ class RoomGrid(MiniGridEnv):
         door = Door(color, state='locked' if locked else 'closed')
 
         pos = room.door_pos[door_idx]
-        self.grid[pos] = door
+        self[pos] = door
 
         room.doors[door_idx] = door
         room.neighbors[door_idx].doors[self._door_idx(door_idx, 2)] = door
@@ -226,16 +226,16 @@ class RoomGrid(MiniGridEnv):
         # Ordering of walls is right, down, left, up
         if wall_idx == 'right':
             for i in range(1, h - 1):
-                self.grid[ti + i, tj + w - 1].clear()
+                self[ti + i, tj + w - 1].clear()
         elif wall_idx == 'down':
             for j in range(1, w - 1):
-                self.grid[ti + h - 1, tj + j].clear()
+                self[ti + h - 1, tj + j].clear()
         elif wall_idx == 'left':
             for i in range(1, h - 1):
-                self.grid[ti + i, tj].clear()
+                self[ti + i, tj].clear()
         elif wall_idx == 'up':
             for j in range(1, w - 1):
-                self.grid[ti, tj + j].clear()
+                self[ti, tj + j].clear()
         else:
             raise ValueError(f'invalid wall: {wall_idx}')
 
@@ -258,15 +258,15 @@ class RoomGrid(MiniGridEnv):
         # Find a position that is not right in front of an object
         while True:
             super().place_agent(top=room.top, size=room.size, rand_dir=rand_dir, max_tries=1000)
-            front_cell = self.grid[self.agent.front_pos]
+            front_cell = self[self.agent.front_pos]
             if front_cell.entity is None or front_cell.entity.type == 'wall':
                 break
             else:
-                self.grid[self.agent.pos].clear()
+                self[self.agent.pos].clear()
 
         return self.agent.pos
 
-    def connect_all(self, door_colors=OBJECT_COLORS, max_itrs=5000):
+    def connect_all(self, door_colors=COLORS, max_itrs=5000):
         """
         Make sure that all rooms are reachable by the agent from its
         starting position
@@ -337,7 +337,7 @@ class RoomGrid(MiniGridEnv):
         dists = []
 
         while len(dists) < num_distractors:
-            color = self.rng.choice(OBJECT_COLORS)
+            color = self.rng.choice(COLORS)
             type = self.rng.choice(['key', 'ball', 'box'])
             obj = (type, color)
 

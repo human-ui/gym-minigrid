@@ -4,7 +4,7 @@ import gym
 
 from gym_minigrid.minigrid import Grid, MiniGridEnv
 from gym_minigrid.roomgrid import RoomGrid
-from gym_minigrid.entities import Goal, Wall, Door, Key, Ball, Box, Lava, OBJECT_COLORS
+from gym_minigrid.entities import Goal, Wall, Door, Key, Ball, Box, Lava, COLORS
 
 
 class Empty(MiniGridEnv):
@@ -39,7 +39,7 @@ class Empty(MiniGridEnv):
         self.wall_rect(0, 0, height, width)
 
         # Place a goal square in the bottom-right corner
-        self.grid[height - 2, width - 2] = Goal()
+        self[height - 2, width - 2] = Goal()
 
         # Place the agent
         self.agent.pos = self.agent_start_pos
@@ -85,13 +85,13 @@ class FourRooms(MiniGridEnv):
                 if j + 1 < 2:
                     self.vert_wall(i_top, j_right, room_h)
                     pos = (self.rng.randint(i_top + 1, i_bottom), j_right)
-                    self.grid[pos].clear()
+                    self[pos].clear()
 
                 # Bottom wall and door
                 if i + 1 < 2:
                     self.horz_wall(i_bottom, j_left, room_w)
                     pos = (i_bottom, self.rng.randint(j_left + 1, j_right))
-                    self.grid[pos].clear()
+                    self[pos].clear()
 
         # Randomize the player start position and orientation
         if self._agent_default_pos is not None:
@@ -101,7 +101,7 @@ class FourRooms(MiniGridEnv):
             self.place_agent()
 
         if self._goal_default_pos is not None:
-            self.grid[self._goal_default_pos] = Goal()
+            self[self._goal_default_pos] = Goal()
         else:
             self.place_obj(Goal())
 
@@ -129,7 +129,7 @@ class DoorKey(MiniGridEnv):
         self.wall_rect(0, 0, height, width)
 
         # Place a goal in the bottom-right corner
-        self.grid[height - 2, width - 2] = Goal()
+        self[height - 2, width - 2] = Goal()
 
         # Create a vertical splitting wall
         split_idx = self.rng.randint(2, width - 2)
@@ -141,7 +141,7 @@ class DoorKey(MiniGridEnv):
 
         # Place a door in the wall
         door_idx = self.rng.randint(1, height - 2)
-        self.grid[door_idx, split_idx] = Door('yellow', state='locked')
+        self[door_idx, split_idx] = Door('yellow', state='locked')
 
         # Place a yellow key on the left side
         self.place_obj(Key('yellow'), top=(0, 0), size=(height, split_idx))
@@ -242,14 +242,14 @@ class MultiRoom(MiniGridEnv):
             # If this isn't the first room, place the entry door
             if idx > 0:
                 # Pick a door color different from the previous one
-                door_colors = set(OBJECT_COLORS)
+                door_colors = set(COLORS)
                 if prev_door_color:
                     door_colors.remove(prev_door_color)
                 # Note: the use of sorting here guarantees determinism,
                 # This is needed because Python's set is not deterministic
                 door_colors = self.rng.choice(sorted(door_colors))
 
-                self.grid[room.entry_door_pos] = Door(door_colors)
+                self[room.entry_door_pos] = Door(door_colors)
                 prev_door_color = door_colors
 
                 prev_room = room_list[idx - 1]
@@ -422,7 +422,7 @@ class Fetch(MiniGridEnv):
         # For each object to be generated
         while len(objs) < self.num_objs:
             obj_type = self.rng.choice(types)
-            obj_color = self.rng.choice(OBJECT_COLORS)
+            obj_color = self.rng.choice(COLORS)
 
             if obj_type == 'key':
                 obj = Key(obj_color)
@@ -488,7 +488,7 @@ class GoToObject(MiniGridEnv):
         # Until we have generated all the objects
         while len(objs) < self.num_objs:
             obj_type = self.rng.choice(types)
-            obj_color = self.rng.choice(OBJECT_COLORS)
+            obj_color = self.rng.choice(COLORS)
 
             # If this object already exists, try again
             if (obj_type, obj_color) in objs:
@@ -565,12 +565,12 @@ class GoToDoor(MiniGridEnv):
                     (self.rng.randint(2, height - 2), width - 1)]
 
         # Generate the door colors
-        door_colors = self.rng.choice(OBJECT_COLORS, size=len(door_pos), replace=False)
+        door_colors = self.rng.choice(COLORS, size=len(door_pos), replace=False)
 
         # Place the doors in the grid
         for idx, pos in enumerate(door_pos):
             color = door_colors[idx]
-            self.grid[pos] = Door(color)
+            self[pos] = Door(color)
 
         # Randomize the agent start position and orientation
         self.place_agent()
@@ -650,7 +650,7 @@ class PutNear(MiniGridEnv):
         # Until we have generated all the objects
         while len(objs) < self.num_objs:
             obj_type = self.rng.choice(types)
-            obj_color = self.rng.choice(OBJECT_COLORS)
+            obj_color = self.rng.choice(COLORS)
 
             # If this object already exists, try again
             if (obj_type, obj_color) in objs:
@@ -674,7 +674,7 @@ class PutNear(MiniGridEnv):
         # Choose a random object to be moved
         obj_idx = self.rng.randint(0, len(objs))
         self.move_type, self.move_color = objs[obj_idx]
-        self.move_pos = obj_pos[obj_idx]
+        # self.move_pos = obj_pos[obj_idx]
 
         # Choose a target object (to put the first object next to)
         while True:
@@ -702,7 +702,7 @@ class PutNear(MiniGridEnv):
 
         # If successfully dropping an object near the target
         if self.actions[action] == 'drop' and pre_carrying:
-            if self.grid[oj, oi] is pre_carrying:
+            if self[oj, oi] is pre_carrying:
                 if abs(oi - ti) <= 1 and abs(oj - tj) <= 1:
                     reward = self._reward()
             done = True
@@ -739,12 +739,12 @@ class RedBlueDoor(MiniGridEnv):
         # Add a red door at a random position in the left wall
         pos = self.rng.randint(1, self.size - 1)
         self.red_door = Door('red')
-        self.grid[pos, self.size // 2] = self.red_door
+        self[pos, self.size // 2] = self.red_door
 
         # Add a blue door at a random position in the right wall
         pos = self.rng.randint(1, self.size - 1)
         self.blue_door = Door('blue')
-        self.grid[pos, self.size // 2 + self.size - 1] = self.blue_door
+        self[pos, self.size // 2 + self.size - 1] = self.blue_door
 
         # Generate the mission string
         self.mission = 'open the red door then the blue door'
@@ -830,7 +830,7 @@ class Memory(MiniGridEnv):
         # Vertical hallway
         self.vert_wall(0, hallway_end, height=height)
         self.vert_wall(0, hallway_end + 2, height=height)
-        self.grid[height // 2, hallway_end].clear()
+        self[height // 2, hallway_end].clear()
 
         # Fix the player's start position and orientation
         self.agent.pos = (height // 2,
@@ -839,13 +839,13 @@ class Memory(MiniGridEnv):
 
         # Place objects
         start_room_obj = self.rng.choice([Key, Ball])
-        self.grid[height // 2 - 1, 1] = start_room_obj('green')
+        self[height // 2 - 1, 1] = start_room_obj('green')
 
         other_objs = self.rng.permutation([Ball, Key])
         pos0 = (height // 2 - 2, hallway_end + 1)
         pos1 = (height // 2 + 2, hallway_end + 1)
-        self.grid[pos0] = other_objs[0]('green')
-        self.grid[pos1] = other_objs[1]('green')
+        self[pos0] = other_objs[0]('green')
+        self[pos1] = other_objs[1]('green')
 
         # Choose the target objects
         if start_room_obj == other_objs[0]:
@@ -944,16 +944,16 @@ class LockedRoom(MiniGridEnv):
         locked_room.locked = True
         goal_i = self.rng.randint(locked_room.top[0] + 1, locked_room.top[0] + locked_room.size[0] - 1)
         goal_j = self.rng.randint(locked_room.top[1] + 1, locked_room.top[1] + locked_room.size[1] - 1)
-        self.grid[goal_i, goal_j] = Goal()
+        self[goal_i, goal_j] = Goal()
 
         # Assign the door colors
-        colors = self.rng.choice(OBJECT_COLORS, size=len(self.rooms))
+        colors = self.rng.choice(COLORS, size=len(self.rooms))
         for room, color in zip(self.rooms, colors):
             room.color = color
             if room.locked:
-                self.grid[room.door_pos] = Door(color, state='locked')
+                self[room.door_pos] = Door(color, state='locked')
             else:
-                self.grid[room.door_pos] = Door(color)
+                self[room.door_pos] = Door(color)
 
         # Select a random room to contain the key
         while True:
@@ -961,7 +961,7 @@ class LockedRoom(MiniGridEnv):
             if key_room != locked_room:
                 break
         key_pos = key_room.rand_pos(self)
-        self.grid[key_pos] = Key(locked_room.color)
+        self[key_pos] = Key(locked_room.color)
 
         # Randomize the player start position and orientation
         self.place_agent(
@@ -1142,8 +1142,8 @@ class BlockedUnlockPickup(RoomGrid):
         # Make sure the two rooms are directly connected by a locked door
         door = self.add_door(0, 0, door_idx='right', locked=True)
         # Block the door with a ball
-        color = self.rng.choice(OBJECT_COLORS)
-        self.grid[door.pos[0], door.pos[1] - 1] = Ball(color)
+        color = self.rng.choice(COLORS)
+        self[door.pos[0], door.pos[1] - 1] = Ball(color)
         # Add a key to unlock the door
         self.add_object(0, 0, 'key', door.color)
         self.place_agent(i=0, j=0)
@@ -1189,11 +1189,11 @@ class _ObstructedMaze(RoomGrid):
         super()._gen_grid(height, width)
 
         # Define the color of the ball to pick up
-        self.ball_to_find_color = OBJECT_COLORS[0]
+        self.ball_to_find_color = COLORS[0]
         # Define the color of the balls that obstruct doors
-        self.blocking_ball_color = OBJECT_COLORS[1]
+        self.blocking_ball_color = COLORS[1]
         # Define the color of boxes in which keys are hidden
-        self.box_color = OBJECT_COLORS[2]
+        self.box_color = COLORS[2]
 
         self.mission = f'pick up the {self.ball_to_find_color} ball'
 
@@ -1227,7 +1227,7 @@ class _ObstructedMaze(RoomGrid):
             elif door_idx == 'up':
                 offset = (1, 0)
             pos = (door.pos[0] + offset[0], door.pos[1] + offset[1])
-            self.grid[pos] = Ball(self.blocking_ball_color)
+            self[pos] = Ball(self.blocking_ball_color)
 
         if locked:
             obj = Key(door.color)
@@ -1262,7 +1262,7 @@ class ObstructedMaze_1Dlhb(_ObstructedMaze):
         super()._gen_grid(height, width)
 
         self.add_door(0, 0, door_idx='right',
-                      color=self.rng.choice(OBJECT_COLORS),
+                      color=self.rng.choice(COLORS),
                       locked=True,
                       key_in_box=self.key_in_box,
                       blocked=self.blocked)
@@ -1306,7 +1306,7 @@ class ObstructedMaze_Full(_ObstructedMaze):
             'up': (0, 1)
             }
         # Define all possible colors for doors
-        door_colors = self.rng.choice(OBJECT_COLORS, size=len(side_rooms), replace=False)
+        door_colors = self.rng.choice(COLORS, size=len(side_rooms), replace=False)
         door_colors = {
             'right': door_colors[0],
             'down': door_colors[1],
@@ -1375,12 +1375,12 @@ class DistShift(MiniGridEnv):
         self.wall_rect(0, 0, height, width)
 
         # Place a goal square in the bottom-right corner
-        self.grid[self.goal_pos] = Goal()
+        self[self.goal_pos] = Goal()
 
         # Place the lava rows
         for j in range(self.width - 6):
-            self.grid[1, 3 + j] = Lava()
-            self.grid[self.strip2_row, 3 + j] = Lava()
+            self[1, 3 + j] = Lava()
+            self[self.strip2_row, 3 + j] = Lava()
 
         # Place the agent
         if self.agent_start_pos is not None:
@@ -1422,7 +1422,7 @@ class LavaGap(MiniGridEnv):
         self.agent.state = 'right'
 
         # Place a goal square in the bottom-right corner
-        self.grid[height - 2, width - 2] = Goal()
+        self[height - 2, width - 2] = Goal()
 
         # Generate and store random gap position
         gap_pos = (self.rng.randint(1, height - 1),
@@ -1433,7 +1433,7 @@ class LavaGap(MiniGridEnv):
                        obj=self.obstacle_type)
 
         # Put a hole in the wall
-        self.grid[gap_pos].clear()
+        self[gap_pos].clear()
 
         if type(self.obstacle_type) is Lava:
             self.mission = 'avoid the lava and get to the green goal square'
@@ -1472,7 +1472,7 @@ class _Crossing(MiniGridEnv):
         self.agent.state = 'right'
 
         # Place a goal square in the bottom-right corner
-        self.grid[height - 2, width - 2] = Goal()
+        self[height - 2, width - 2] = Goal()
 
         # Place obstacles (lava or walls)
 
@@ -1488,7 +1488,7 @@ class _Crossing(MiniGridEnv):
             itertools.product(rivers_h, range(1, width - 1)),
         )
         for pos in obstacle_pos:
-            self.grid[pos] = self.obstacle_type()
+            self[pos] = self.obstacle_type()
 
         # Sample path to goal
         path = ['v'] * len(rivers_v) + ['h'] * len(rivers_h)
@@ -1509,7 +1509,7 @@ class _Crossing(MiniGridEnv):
                     range(limits_h[room_i] + 1, limits_h[room_i + 1]))
                 j = limits_v[room_j + 1]
                 room_j += 1
-            self.grid[i, j].clear()
+            self[i, j].clear()
 
         if type(self.obstacle_type) is Lava:
             self.mission = 'avoid the lava and get to the green goal square'
@@ -1577,7 +1577,7 @@ class DynamicObstacles(MiniGridEnv):
         self.wall_rect(0, 0, height, width)
 
         # Place a goal square in the bottom-right corner
-        self.grid[height - 2, width - 2] = Goal()
+        self[height - 2, width - 2] = Goal()
 
         # Place the agent
         if self.agent_start_pos is not None:
@@ -1600,7 +1600,7 @@ class DynamicObstacles(MiniGridEnv):
             action = 0
 
         # Check if there is an obstacle in front of the agent
-        front_cell = self.grid[self.agent.front_pos]
+        front_cell = self[self.agent.front_pos]
         not_clear = front_cell.entity is not None and front_cell.entity.type != 'goal'
 
         obs, reward, done, info = super().step(action)
@@ -1618,7 +1618,7 @@ class DynamicObstacles(MiniGridEnv):
 
             try:
                 self.place_obj(self.obstacles[i_obst], top=top, size=(3,3), max_tries=100)
-                self.grid[old_pos].clear()
+                self[old_pos].clear()
             except RecursionError:
                 pass
 
@@ -1661,15 +1661,15 @@ class Playground(MiniGridEnv):
                 if j + 1 < 3:
                     self.vert_wall(i_top, j_right, height=room_height)
                     pos = (self.rng.randint(i_top + 1, i_bottom - 1), j_right)
-                    color = self.rng.choice(OBJECT_COLORS)
-                    self.grid[pos] = Door(color)
+                    color = self.rng.choice(COLORS)
+                    self[pos] = Door(color)
 
                 # Bottom wall and door
                 if i + 1 < 3:
                     self.horz_wall(i_bottom, j_left, width=room_width)
                     pos = (i_bottom, self.rng.randint(j_left + 1, j_right - 1))
-                    color = self.rng.choice(OBJECT_COLORS)
-                    self.grid[pos] = Door(color)
+                    color = self.rng.choice(COLORS)
+                    self[pos] = Door(color)
 
         # Randomize the player start position and orientation
         self.place_agent()
@@ -1678,7 +1678,7 @@ class Playground(MiniGridEnv):
         types = ['key', 'ball', 'box']
         for i in range(0, 12):
             obj_type = self.rng.choice(types)
-            obj_color = self.rng.choice(OBJECT_COLORS)
+            obj_color = self.rng.choice(COLORS)
             if obj_type == 'key':
                 obj = Key(obj_color)
             elif obj_type == 'ball':
