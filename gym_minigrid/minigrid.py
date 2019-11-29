@@ -352,8 +352,8 @@ class MiniGridEnv(gym.Env):
         env.width = pos[1].stop - pos[1].start
         env.grid = Grid(*env.shape)
         from_, to_ = self._slices(pos)
-        env.agent.pos = (self.agent.pos[0] - from_[0].start,
-                         self.agent.pos[1] - from_[1].start)
+        env.agent.pos = (self.agent.pos[0] - pos[0].start,
+                         self.agent.pos[1] - pos[1].start)
         env.grid[to_] = self.grid[from_]
         return env
 
