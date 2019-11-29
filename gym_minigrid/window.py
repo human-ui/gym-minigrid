@@ -23,7 +23,6 @@ class Window(QMainWindow):
     }
 
     def __init__(self, env, renderer):
-
         super().__init__()
 
         self.env = env
@@ -40,7 +39,7 @@ class Window(QMainWindow):
         self.missionBox.setReadOnly(True)
         self.missionBox.setMinimumSize(400, 100)
 
-        self.setText(self.env.mission)
+        self.missionBox.setPlainText(self.env.mission)
 
         # Center the image
         hbox = QHBoxLayout()
@@ -63,12 +62,6 @@ class Window(QMainWindow):
         super().show()
         self.setFocus()
 
-    def setPixmap(self, pixmap):
-        self.imgLabel.setPixmap(pixmap)
-
-    def setText(self, text):
-        self.missionBox.setPlainText(text)
-
     def keyPressEvent(self, e):
         action = self.KEYS.get(e.key())
         if action is None:
@@ -77,16 +70,15 @@ class Window(QMainWindow):
 
     def reset(self):
         self.env.reset()
-        self.setText(self.env.mission)
+        self.missionBox.setPlainText(self.env.mission)
 
     def render(self):
-        self.setPixmap(self.renderer.pixmap())
+        self.imgLabel.setPixmap(self.renderer.pixmap())
         QApplication.processEvents()
 
     def keyDownCb(self, action):
         if action == 'reset':
             self.reset()
-            print(self.env)
             self.render()
             return
 
