@@ -56,14 +56,6 @@ class Agent(object):
     def dir(self):
         return self.STATES.index(self.state)
 
-    @property
-    def idir(self):
-        return self.DIR_TO_VEC[self.state][0]
-
-    @property
-    def jdir(self):
-        return self.DIR_TO_VEC[self.state][1]
-
     def rotate_left(self):
         idx = self.STATES.index(self.state)
         self.state = self.STATES[(idx - 1) % len(self.STATES)]
@@ -123,10 +115,6 @@ class WorldObj(object):
         self.color = color
         self.state = state
         self.contains = None
-        # self.pos = None
-
-    def encode(self):
-        return [self.type, self.color, self.state]
 
     def can_overlap(self):
         """Can the agent overlap with this?"""
