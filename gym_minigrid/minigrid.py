@@ -3,7 +3,7 @@ import math, copy
 import numpy as np
 import gym
 
-from gym_minigrid import entities, render_text
+from gym_minigrid import entities, render_text, encoding
 
 
 class Cell(object):
@@ -16,7 +16,6 @@ class Cell(object):
         self.entity = None
 
     def __str__(self):
-
         if self.entity is not None:
             r = f', has:\n  {self.entity}'
         else:
@@ -26,19 +25,12 @@ class Cell(object):
     def copy(self):
         return copy.deepcopy(self)
 
-    def to_array(self):
-        if self.entity is None:
-            arr = np.array([None, None, None])
+    def encode(self):
+        if self.entity is not None:
+            rep = self.entity.encode()
         else:
-            arr = self.entity.to_array()
-        return arr
-
-    def to_idx_array(self):
-        if self.entity is None:
-            arr = np.array([0, 0, 0])
-        else:
-            arr = self.entity.to_idx_array()
-        return arr
+            rep = {}
+        return rep
 
 
 class Grid(object):
@@ -91,161 +83,6 @@ class Grid(object):
         return self._grid.shape
 
 
-class Grid2(Grid):
-
-    def __init__(self, height, width, agent):
-        super().__init__(height, width)
-        self.agent = agent
-
-    def encode(self, mask=None, as_str=False):
-        """
-        Produce a compact numpy encoding of the grid
-        """
-        if mask is None:
-            mask = np.ones(self._grid.shape, dtype=bool)
-
-        n_attrs = len(self._grid[0,0].to_array())
-        assert n_attrs == 3
-        array = np.zeros((n_attrs,) + self._grid.shape)
-        if as_str:
-            array = array.astype(np.object)
-        else:
-            array = array.astype('uint8')
-
-        for (i, j), cell in np.ndenumerate(self._grid):
-            if as_str:
-                array[:, i, j] = cell.to_array()  # type, color, state
-            else:
-                array[:, i, j] = cell.to_idx_array()
-
-        return array
-
-    @staticmethod
-    def decode(array):
-        """
-        Decode an observation back into a grid
-        """
-        channels, height, width = array.shape
-        assert channels == 3
-        assert height == width
-
-        agent = entities.Agent(view_size=height)
-        agent.pos = (height, width // 2)
-        agent.state = 'up'
-
-        grid = Grid(height, width, agent)
-
-        for (i, j), _ in np.ndenumerate(grid):
-            type_, color, state = array[:, i, j]
-            obj = entities.make(entities.OBJECTS[type_],
-                                color=entities.COLORS[color])
-            if hasattr(obj, 'STATES'):
-                obj.state = obj.STATES[state]
-            grid[i, j].entity = obj
-
-        return grid
-
-    def get_obs(self, as_str=False, see_through_walls=False):
-        # obs_box = self.get_obs_box()
-        grid = self[self.agent.view_box]
-        obs = grid.encode(as_str=as_str)
-
-        # remove the parts of environment that the agent cannot see
-        mask = grid.visible(see_through_walls=see_through_walls)
-        obs[:, ~mask] = None if as_str else 0
-
-        # obs_arr = np.zeros((len(obs), self.agent.view_size, self.agent.view_size))
-        # obs_arr = self.put_obs(obs_arr, obs)
-
-        # orient agent upright
-        obs = np.rot90(obs, k=self.agent.dir + 1, axes=(1,2))
-        return obs
-
-    def visible(self, see_through_walls=False):
-        """
-        Process occluders and visibility
-        Note that this incurs some performance cost  # TODO: verify if still true
-        """
-        def _flood_fill(pos):
-            if pos[0] < 0 or pos[1] < 0 or pos[0] >= self.shape[0] or pos[1] >= self.shape[1]:
-                return
-
-            if mask[pos]:  # already visited
-                return
-
-            if view_box[pos] == 0:  # outside agent's view_size
-                return
-
-            if self[pos].entity is not None:
-                if not self[pos].entity.see_behind():   # this is a boundary
-                    mask[pos] = True  # add it to the list of visibles and exit
-                    return
-
-            mask[pos] = True
-
-            # visit all neighbors in the surrounding square
-            for i in [-1, 0, 1]:
-                for j in [-1, 0, 1]:
-                    if i != 0 or j != 0:  # skip current pos
-                        _flood_fill((pos[0] + i, pos[1] + j))
-
-        if see_through_walls:
-            mask = np.ones(self.shape, dtype=bool)
-        else:
-            mask = np.zeros(self.shape, dtype=bool)
-            _flood_fill(self.agent.pos)
-
-        view_box = np.zeros(self.shape, dtype=bool)
-        from_, to_ = self._slices(self.agent.view_box)
-        view_box[from_[0], from_[1]] = True
-
-        # obsgrid_mask = obsgrid.mask()
-        # mask[top_i: bottom_i, top_j: bottom_j] = obsgrid_mask[offset_i: offset_i + bottom_i - top_i, offset_j: offset_j + bottom_j - top_j]
-        return mask
-
-    def visited(self):
-        arr = np.zeros(self.shape, dtype=bool)
-        for pos in self.agent.visited:
-            arr[pos] = True
-        return arr
-
-    # def put_obs(self, obs):
-    #     top_i, top_j, bottom_i, bottom_j = self.agent.view_box
-    #     offset_i = -top_i if top_i < 0 else 0
-    #     offset_j = -top_j if top_j < 0 else 0
-    #     top_i = max(0, top_i)
-    #     top_j = max(0, top_j)
-    #     bottom_i = min(self.shape[0], bottom_i)
-    #     bottom_j = min(self.shape[1], bottom_j)
-
-    #     obs_box = slice(top_i, bottom_i), slice(top_j, bottom_j)
-
-    #     self[obs_box] = obs[offset_i: offset_i + bottom_i - top_i,
-    #                         offset_j: offset_j + bottom_j - top_j]
-
-    def render(self, mode='human', highlight=True, cell_pixels=32):
-        if mode in ['human', 'rgb_array', 'pixmap']:
-            from gym_minigrid.render_image import MiniGridImage
-            renderer = MiniGridImage(self, highlight=highlight, cell_pixels=cell_pixels)
-            if mode == 'human':
-                renderer.show()
-            elif mode == 'rgb_array':
-                return renderer.array()
-            elif mode == 'pixmap':
-                return renderer.pixmap()
-
-        elif mode == 'ascii':
-            return str(render_text.ASCII(self))
-        elif mode == 'ansi':
-            return render_text.ANSI(self)()
-        elif mode == 'curses4bit':
-            return render_text.Curses4bit(self)()
-        elif mode == 'curses8bit':
-            return render_text.Curses8bit(self)()
-        else:
-            raise ValueError(f'Render mode {mode} not recognized')
-
-
 class MiniGridEnv(gym.Env):
     """
     2D grid world game environment
@@ -274,15 +111,14 @@ class MiniGridEnv(gym.Env):
 
         # Observations are dictionaries containing an
         # encoding of the grid and a textual 'mission' string
+        self._encoder = encoding.Encoder(observation=True)
+        n_channels = len(self._encoder)
         self.observation_space = gym.spaces.Box(
             low=0,
-            high=255,
-            shape=(3, agent_view_size, agent_view_size),
-            dtype='uint8'
+            high=1,
+            shape=(n_channels, agent_view_size, agent_view_size),
+            dtype='float'
         )
-        self.observation_space = gym.spaces.Dict({
-            'image': self.observation_space
-        })
 
         # Range of possible rewards
         self.reward_range = (0, 1)
@@ -292,6 +128,8 @@ class MiniGridEnv(gym.Env):
         self.width = width
         self.max_steps = max_steps
         self.see_through_walls = see_through_walls
+
+        # self._decoder = Enc()
 
         # Initialize the RNG
         self.seed(seed=seed)
@@ -392,59 +230,98 @@ class MiniGridEnv(gym.Env):
 
         return (from_i, from_j), (to_i, to_j)
 
-    def encode(self, mask=None, as_str=False):
+    def encode(self, mask=None):
         """
         Produce a compact numpy encoding of the grid
         """
         if mask is None:
             mask = np.ones(self.shape, dtype=bool)
 
-        n_attrs = len(self[0,0].to_array())
-        assert n_attrs == 3
-        array = np.zeros((n_attrs,) + self.shape)
-        if as_str:
-            array = array.astype(np.object)
-        else:
-            array = array.astype('uint8')
+        n_channels = len(self._encoder.keys)
+        array = np.zeros((n_channels,) + self.shape, dtype=bool)
+
+        e = self._encoder
 
         for (i, j), cell in np.ndenumerate(self.grid):
-            if as_str:
-                array[:, i, j] = cell.to_array()  # type, color, state
+            array[e.cell['visible'], i, j] = mask[i, j]
+            array[e.cell['visited'], i, j] = (i, j) in self.agent.visited
+            if cell.entity is None:
+                array[e.cell['empty'], i, j] = True
             else:
-                array[:, i, j] = cell.to_idx_array()
-        # print('$' * 10)
-        # print('encode', array)
-        # print('$' * 10)
+                idx = e.object_type[cell.entity.type]
+                array[idx, i, j] = True
+                idx = e.object_color[cell.entity.color]
+                array[idx, i, j] = True
+                if cell.entity.state is not None:
+                    idx = e.object_state[cell.entity.state]
+                    array[idx, i, j] = True
+
+            if self.agent.pos == (i, j):
+                array[e.agent['is_here'], i, j] = True
+                idx = e.agent_state[self.agent.state]
+                array[idx, i, j] = True
+                if self.agent.is_carrying:
+                    array[e.agent['is_carrying'], i, j] = True
+                    idx = e.carrying_type[self.agent.carrying.type]
+                    array[idx, i, j] = True
+                    idx = e.carrying_color[self.agent.carrying.color]
+                    array[idx, i, j] = True
+
         return array
 
-    # @staticmethod
-    def decode(self, array):
+    def encode_obs(self):
+        array = self.encode(mask=self.visible())
+        return array[self._encoder.obs_inds]
+
+    def decode(self, array, observation=False):
         """
-        Decode an observation back into a grid
+        Decode an encoded array back into a grid
         """
         channels, height, width = array.shape
-        assert channels == 3
-        assert height == width
 
-        # breakpoint()
         env = copy.copy(self)
         env.agent = copy.copy(self.agent)
         env.height = height
         env.width = width
         env.grid = Grid(height, width)
-        env.agent.pos = (height, width // 2)
-        env.agent.state = 'up'
+
+        if observation:
+            if height != width:
+                raise ValueError('For observations, we expect height and'
+                                 f'width to be equal but got {height} and {width}.')
+            env.agent.pos = (height - 1, (width - 1) // 2)
+            env.agent.state = 'up'
 
         for (i, j), _ in np.ndenumerate(env.grid):
-            type_, color, state = array[:, i, j]
-            if type_ != 0:
-                obj = entities.make(entities.OBJECTS[type_ - 1],
-                                    color=entities.COLORS[color])
+            d = encoding.Decoder(array[:, i, j], observation=observation)
+
+            if not d.cell['empty']:
+                obj = entities.make(d.object_type, color=d.object_color)
                 if hasattr(obj, 'STATES'):
-                    obj.state = obj.STATES[state]
+                    obj.state = d.object_state
                 env[i, j].entity = obj
 
+            if not observation:
+                if d.agent['is_here']:
+                    env.agent.pos = (i, j)
+                    env.agent.state = d.agent_state
+                    if d.agent['is_carrying']:
+                        env.agent.carrying = entities.make(
+                            d.carrying_type,
+                            color=d.carrying_color)
+                if d.cell['visited']:
+                    env.agent.visited.add((i, j))
+            else:
+                if (i, j) == env.agent.pos:
+                    if d.agent['is_carrying']:
+                        env.agent.carrying = entities.make(
+                            d.carrying_type,
+                            color=d.carrying_color)
+
         return env
+
+    def decode_obs(self, array):
+        return self.decode(array, observation=True)
 
     def visible(self):
         """
@@ -452,6 +329,8 @@ class MiniGridEnv(gym.Env):
         Note that this incurs some performance cost  # TODO: verify if still true
         """
         def _flood_fill(pos):
+            visited.add(pos)
+
             if pos[0] < 0 or pos[1] < 0 or pos[0] >= self.shape[0] or pos[1] >= self.shape[1]:
                 return
 
@@ -462,7 +341,7 @@ class MiniGridEnv(gym.Env):
                 return
 
             if self[pos].entity is not None:
-                if not self[pos].entity.see_behind():   # this is a boundary
+                if not self[pos].entity.see_behind():  # this is a boundary
                     mask[pos] = True  # add it to the list of visibles and exit
                     return
 
@@ -471,8 +350,9 @@ class MiniGridEnv(gym.Env):
             # visit all neighbors in the surrounding square
             for i in [-1, 0, 1]:
                 for j in [-1, 0, 1]:
-                    if i != 0 or j != 0:  # skip current pos
-                        _flood_fill((pos[0] + i, pos[1] + j))
+                    new_pos = (pos[0] + i, pos[1] + j)
+                    if new_pos not in visited:
+                        _flood_fill(new_pos)
 
         view_box = np.zeros(self.shape, dtype=bool)
         from_, to_ = self._slices(self.agent.view_box)
@@ -482,6 +362,7 @@ class MiniGridEnv(gym.Env):
             mask = np.ones(self.shape, dtype=bool)
         else:
             mask = np.zeros(self.shape, dtype=bool)
+            visited = set()
             _flood_fill(self.agent.pos)
         return mask
 
@@ -644,7 +525,7 @@ class MiniGridEnv(gym.Env):
 
         return obs, reward, done, {}
 
-    def get_obs(self, as_str=False):
+    def get_obs(self, only_image=True):
         """
         Generate the agent's view (partially observable,
         low-resolution encoding)
@@ -655,9 +536,7 @@ class MiniGridEnv(gym.Env):
         # take a slice of the environment within agent's view size
         obs = self[self.agent.view_box]
 
-        im = obs.encode(as_str=as_str)
-        # remove the parts of environment that the agent cannot see
-        im[:, ~obs.visible()] = None if as_str else 0
+        im = obs.encode_obs()
 
         # orient agent upright
         im = np.rot90(im, k=self.agent.dir + 1, axes=(1,2))
@@ -666,12 +545,14 @@ class MiniGridEnv(gym.Env):
         # - an image (partially observable view of the environment)
         # - the agent's direction/orientation (acting as a compass)
         # - a textual mission string (instructions for the agent)
-        # print(im)
-        obs = {'image': im,
-               'direction': self.agent.state,
-               'mission': self.mission
-               }
-        return obs
+
+        if only_image:
+            return im
+        else:
+            return {'image': im,
+                    'direction': self.agent.state,
+                    'mission': self.mission
+                    }
 
     def render(self, mode='human', highlight=True, cell_pixels=32):
         if mode in ['human', 'rgb_array', 'pixmap']:
