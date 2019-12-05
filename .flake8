@@ -11,4 +11,6 @@
 # ignored because there are sometimes imports after sys.path.insert
 # E501: line too long ( > 79 characters)
 # ignored because screens are no longer limited to few characters
-ignore = E123,E126,E231,E401,E402,E501
+# W503: line break before binary operator
+# in flake8, one has to choose where to break; recommendation is before
+ignore = E123,E126,E231,E401,E402,E501,W503
