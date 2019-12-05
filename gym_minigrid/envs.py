@@ -17,7 +17,7 @@ class Empty(MiniGridEnv):
         size=8,
         agent_start_pos=(1,1),
         agent_start_state='right',
-        seed=None
+        **kwargs
     ):
         self.agent_start_pos = agent_start_pos
         self.agent_start_state = agent_start_state
@@ -26,9 +26,7 @@ class Empty(MiniGridEnv):
             height=size,
             width=size,
             max_steps=4 * size**2,
-            # Set this to True for maximum speed
-            see_through_walls=True,
-            seed=seed
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -53,10 +51,10 @@ class FourRooms(MiniGridEnv):
     Classic four room reinforcement learning environment. The agent must navigate in a maze composed of four rooms interconnected by 4 gaps in the walls. To obtain a reward, the agent must reach the green goal square. Both the agent and the goal square are randomly placed in any of the four rooms.
     """
 
-    def __init__(self, agent_pos=None, goal_pos=None, seed=None):
+    def __init__(self, agent_pos=None, goal_pos=None, **kwargs):
         self._agent_default_pos = agent_pos
         self._goal_default_pos = goal_pos
-        super().__init__(height=19, width=19, max_steps=100, seed=seed)
+        super().__init__(height=19, width=19, max_steps=100, **kwargs)
 
     def _gen_grid(self, height, width):
         # Create the grid
@@ -113,12 +111,12 @@ class DoorKey(MiniGridEnv):
     This environment has a key that the agent must pick up in order to unlock a goal and then get to the green goal square. This environment is difficult, because of the sparse reward, to solve using classical RL algorithms. It is useful to experiment with curiosity or curriculum learning.
     """
 
-    def __init__(self, size=8, seed=None):
+    def __init__(self, size=8, **kwargs):
         super().__init__(
             height=size,
             width=size,
             max_steps=10 * size * size,
-            seed=seed
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -172,7 +170,7 @@ class MultiRoom(MiniGridEnv):
                  min_num_rooms=6,
                  max_num_rooms=6,
                  max_room_size=10,
-                 seed=None
+                 **kwargs
                  ):
         assert min_num_rooms > 0
         assert max_num_rooms >= min_num_rooms
@@ -188,7 +186,7 @@ class MultiRoom(MiniGridEnv):
             height=25,
             width=25,
             max_steps=self.max_num_rooms * 20,
-            seed=seed
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -393,7 +391,7 @@ class Fetch(MiniGridEnv):
         self,
         size=8,
         num_objs=3,
-        seed=None
+        **kwargs
     ):
         self.num_objs = num_objs
 
@@ -401,9 +399,7 @@ class Fetch(MiniGridEnv):
             height=size,
             width=size,
             max_steps=5 * size**2,
-            # Set this to True for maximum speed
-            see_through_walls=True,
-            seed=seed
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -463,16 +459,14 @@ class GoToObject(MiniGridEnv):
     This environment is a room with four doors, one on each wall. The agent receives a textual (mission) string as input, telling it which door to go to, (eg: "go to the red door"). It receives a positive reward for performing the `done` action next to the correct door, as indicated in the mission string. (BUG: doesn't look like the mission had that indicated)
     """
 
-    def __init__(self, size=6, num_objs=2, seed=None):
+    def __init__(self, size=6, num_objs=2, **kwargs):
         self.num_objs = num_objs
 
         super().__init__(
             height=size,
             width=size,
             max_steps=5 * size**2,
-            # Set this to True for maximum speed
-            see_through_walls=True,
-            seed=seed
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -535,16 +529,14 @@ class GoToDoor(MiniGridEnv):
     This environment is a room with four doors, one on each wall. The agent receives a textual (mission) string as input, telling it which door to go to, (eg: "go to the red door"). It receives a positive reward for performing the `done` action next to the correct door, as indicated in the mission string.
     """
 
-    def __init__(self, size=5, seed=None):
+    def __init__(self, size=5, **kwargs):
         assert size >= 5
 
         super().__init__(
             height=size,
             width=size,
             max_steps=5 * size**2,
-            # Set this to True for maximum speed
-            see_through_walls=True,
-            seed=seed
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -611,7 +603,7 @@ class PutNear(MiniGridEnv):
         self,
         size=6,
         num_objs=2,
-        seed=None
+        **kwargs
     ):
         self.num_objs = num_objs
 
@@ -619,9 +611,7 @@ class PutNear(MiniGridEnv):
             height=size,
             width=size,
             max_steps=5 * size,
-            # Set this to True for maximum speed
-            see_through_walls=True,
-            seed=seed
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -715,14 +705,14 @@ class RedBlueDoor(MiniGridEnv):
     The purpose of this environment is to test memory. The agent is randomly placed within a room with one red and one blue door facing opposite directions. The agent has to open the red door and then open the blue door, in that order. The agent, when facing one door, cannot see the door behind him. Hence, the agent needs to remember whether or not he has previously opened the other door in order to reliably succeed at completing the task.
     """
 
-    def __init__(self, size=8, seed=None):
+    def __init__(self, size=8, **kwargs):
         self.size = size
 
         super().__init__(
             height=size,
             width=2 * size,
             max_steps=20 * size * size,
-            seed=seed
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -788,16 +778,14 @@ class Memory(MiniGridEnv):
         self,
         size=13,
         random_length=False,
-        seed=None,
+        **kwargs
     ):
         self.random_length = random_length
         super().__init__(
             height=size,
             width=size,
             max_steps=5 * size**2,
-            # Set this to True for maximum speed
-            see_through_walls=False,
-            seed=seed,
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -897,8 +885,8 @@ class LockedRoom(MiniGridEnv):
     The environment has six rooms, one of which is locked. The agent receives a textual mission string as input, telling it which room to go to in order to get the key that opens the locked room. It then has to go into the locked room in order to reach the final goal. This environment is extremely difficult to solve with vanilla reinforcement learning alone.
     """
 
-    def __init__(self, size=19, seed=None):
-        super().__init__(height=size, width=size, max_steps=10 * size, seed=seed)
+    def __init__(self, size=19, **kwargs):
+        super().__init__(height=size, width=size, max_steps=10 * size, **kwargs)
 
     def _gen_grid(self, height, width):
         # Create the grid
@@ -990,7 +978,7 @@ class KeyCorridor(RoomGrid):
         num_rows=3,
         obj_type='ball',
         room_size=6,
-        seed=None
+        **kwargs
     ):
         self.obj_type = obj_type
 
@@ -998,7 +986,7 @@ class KeyCorridor(RoomGrid):
             room_size=room_size,
             num_rows=num_rows,
             max_steps=30 * room_size**2,
-            seed=seed,
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -1043,14 +1031,14 @@ class Unlock(RoomGrid):
     """
     _requires_language = False
 
-    def __init__(self, seed=None):
+    def __init__(self, **kwargs):
         room_size = 6
         super().__init__(
             num_rows=1,
             num_cols=2,
             room_size=room_size,
             max_steps=8 * room_size**2,
-            seed=seed
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -1082,14 +1070,14 @@ class UnlockPickup(RoomGrid):
     """
     _requires_language = False
 
-    def __init__(self, seed=None):
+    def __init__(self, **kwargs):
         room_size = 6
         super().__init__(
             num_rows=1,
             num_cols=2,
             room_size=room_size,
             max_steps=8 * room_size**2,
-            seed=seed
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -1124,14 +1112,14 @@ class BlockedUnlockPickup(RoomGrid):
     """
     _requires_language = False
 
-    def __init__(self, seed=None):
+    def __init__(self, **kwargs):
         room_size = 6
         super().__init__(
             num_rows=1,
             num_cols=2,
             room_size=room_size,
             max_steps=16 * room_size**2,
-            seed=seed
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -1172,7 +1160,7 @@ class _ObstructedMaze(RoomGrid):
                  num_rows,
                  num_cols,
                  num_rooms_visited,
-                 seed=None
+                 **kwargs
                  ):
         room_size = 6
         max_steps = 4 * num_rooms_visited * room_size**2
@@ -1182,7 +1170,7 @@ class _ObstructedMaze(RoomGrid):
             num_rows=num_rows,
             num_cols=num_cols,
             max_steps=max_steps,
-            seed=seed
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -1247,7 +1235,7 @@ class ObstructedMaze_1Dlhb(_ObstructedMaze):
     """
     _requires_language = False
 
-    def __init__(self, key_in_box=True, blocked=True, seed=None):
+    def __init__(self, key_in_box=True, blocked=True, **kwargs):
         self.key_in_box = key_in_box
         self.blocked = blocked
 
@@ -1255,7 +1243,7 @@ class ObstructedMaze_1Dlhb(_ObstructedMaze):
             num_rows=1,
             num_cols=2,
             num_rooms_visited=2,
-            seed=seed
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -1280,7 +1268,7 @@ class ObstructedMaze_Full(_ObstructedMaze):
     _requires_language = False
 
     def __init__(self, agent_room=(1, 1), key_in_box=True, blocked=True,
-                 num_quarters=4, num_rooms_visited=25, seed=None):
+                 num_quarters=4, num_rooms_visited=25, **kwargs):
         self.agent_room = agent_room
         self.key_in_box = key_in_box
         self.blocked = blocked
@@ -1290,7 +1278,7 @@ class ObstructedMaze_Full(_ObstructedMaze):
             num_rows=3,
             num_cols=3,
             num_rooms_visited=num_rooms_visited,
-            seed=seed
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -1351,7 +1339,7 @@ class DistShift(MiniGridEnv):
         agent_start_pos=(1,1),
         agent_start_state='right',
         strip2_row=2,
-        seed=None
+        **kwargs
     ):
         self.agent_start_pos = agent_start_pos
         self.agent_start_state = agent_start_state
@@ -1362,9 +1350,7 @@ class DistShift(MiniGridEnv):
             width=width,
             height=height,
             max_steps=4 * width * height,
-            # Set this to True for maximum speed
-            see_through_walls=True,
-            seed=seed
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -1397,15 +1383,13 @@ class LavaGap(MiniGridEnv):
     The agent has to reach the green goal square at the opposite corner of the room, and must pass through a narrow gap in a vertical strip of deadly lava. Touching the lava terminate the episode with a zero reward. This environment is useful for studying safety and safe exploration.
     """
 
-    def __init__(self, size=7, obstacle_type=Lava, seed=None):
+    def __init__(self, size=7, obstacle_type=Lava, **kwargs):
         self.obstacle_type = obstacle_type
         super().__init__(
             height=size,
             width=size,
             max_steps=4 * size**2,
-            # Set this to True for maximum speed
-            see_through_walls=False,
-            seed=seed
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -1446,16 +1430,14 @@ class _Crossing(MiniGridEnv):
     Environment with wall or lava obstacles, sparse reward.
     """
 
-    def __init__(self, size=9, num_crossings=1, obstacle_type=Lava, seed=None):
+    def __init__(self, size=9, num_crossings=1, obstacle_type=Lava, **kwargs):
         self.num_crossings = num_crossings
         self.obstacle_type = obstacle_type
         super().__init__(
             height=size,
             width=size,
             max_steps=4 * size * size,
-            # Set this to True for maximum speed
-            see_through_walls=False,
-            seed=seed
+            **kwargs
         )
 
     def _gen_grid(self, height, width):
@@ -1522,8 +1504,8 @@ class LavaCrossing(_Crossing):
     The agent has to reach the green goal square on the other corner of the room while avoiding rivers of deadly lava which terminate the episode in failure. Each lava stream runs across the room either horizontally or vertically, and has a single crossing point which can be safely used; Luckily, a path to the goal is guaranteed to exist. This environment is useful for studying safety and safe exploration.
     """
 
-    def __init__(self, size=9, num_crossings=1, seed=None):
-        super().__init__(size=size, num_crossings=num_crossings, obstacle_type=Lava, seed=seed)
+    def __init__(self, size=9, num_crossings=1, **kwargs):
+        super().__init__(size=size, num_crossings=num_crossings, obstacle_type=Lava, **kwargs)
 
 
 class SimpleCrossing(_Crossing):
@@ -1531,9 +1513,9 @@ class SimpleCrossing(_Crossing):
     Similar to the LavaCrossing environment, the agent has to reach the green goal square on the other corner of the room, however lava is replaced by walls. This MDP is therefore much easier and and maybe useful for quickly testing your algorithms.
     """
 
-    def __init__(self, size=11, num_crossings=5, seed=None):
+    def __init__(self, size=11, num_crossings=5, **kwargs):
         super().__init__(size=size, num_crossings=num_crossings,
-                         obstacle_type=Wall, seed=seed)
+                         obstacle_type=Wall, **kwargs)
 
 
 class DynamicObstacles(MiniGridEnv):
@@ -1547,7 +1529,7 @@ class DynamicObstacles(MiniGridEnv):
             agent_start_pos=(1, 1),
             agent_start_state='right',
             n_obstacles=4,
-            seed=None
+            **kwargs
     ):
         self.agent_start_pos = agent_start_pos
         self.agent_start_state = agent_start_state
@@ -1561,9 +1543,7 @@ class DynamicObstacles(MiniGridEnv):
             height=size,
             width=size,
             max_steps=4 * size * size,
-            # Set this to True for maximum speed
-            see_through_walls=True,
-            seed=seed
+            **kwargs
         )
         # Allow only 3 actions permitted: left, right, forward
         self.action_space = gym.spaces.Discrete(3)
@@ -1631,8 +1611,8 @@ class Playground(MiniGridEnv):
     This environment has no specific goals or rewards.
     """
 
-    def __init__(self, size=19, max_steps=100, seed=None):
-        super().__init__(height=size, width=size, max_steps=max_steps, seed=seed)
+    def __init__(self, size=19, max_steps=100, **kwargs):
+        super().__init__(height=size, width=size, max_steps=max_steps, **kwargs)
 
     def _gen_grid(self, height, width):
         # Create the grid
