@@ -2,42 +2,25 @@ import numpy as np
 
 # Object types
 OBJECTS = ['wall', 'door', 'key', 'ball', 'box', 'goal', 'lava']
-ENTITIES = [None] + OBJECTS + ['agent']
 # Allowed object colors
 COLORS = ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'grey']
 
 
-class Entity(object):
-
-    def __init__(self, type_, color, state=None):
-        self.type = type_
-        self.color = color
-
-        if state is not None:
-            if hasattr(self, 'STATES'):
-                if state not in self.STATES:
-                    raise ValueError(f'State must be one of: {self.STATE}, but got {state}')
-            else:
-                raise AttributeError(f'{self} does not have states')
-        self.state = state
-
-    def __str__(self):
-        return f'{self.type}: {self.color}, state: {self.state}'  # , at {self.pos}'
-
-    def to_array(self):
-        return np.array([self.type, self.color, self.state])
-
-    def to_idx_array(self):
-        raise NotImplementedError
-
-
-class Agent(Entity):
+class Agent(object):
 
     STATES = ['right', 'down', 'left', 'up']
     ACTIONS = ['left', 'right', 'forward', 'pickup', 'drop', 'toggle', 'done']
+    DIR_TO_VEC = {
+        'right': (0, 1),
+        'down': (1, 0),
+        'left': (0, -1),
+        'up': (-1, 0),
+    }
 
-    def __init__(self, view_size=7, color='red', state='right'):
-        super().__init__('agent', color, state)
+    def __init__(self, view_size=7, state='right'):
+        self.type = 'agent'
+        self.color = 'red'
+        self.state = state
         # Number of cells (width and height) in the agent view
         self.view_size = view_size
         self.visited = set()
@@ -72,6 +55,14 @@ class Agent(Entity):
     @property
     def dir(self):
         return self.STATES.index(self.state)
+
+    @property
+    def idir(self):
+        return self.DIR_TO_VEC[self.state][0]
+
+    @property
+    def jdir(self):
+        return self.DIR_TO_VEC[self.state][1]
 
     def rotate_left(self):
         idx = self.STATES.index(self.state)
@@ -122,26 +113,20 @@ class Agent(Entity):
         return slice(top_i, bottom_i), slice(top_j, bottom_j)
 
 
-class WorldObj(Entity):
+class WorldObj(object):
     """
     Base class for grid world objects
     """
 
-    def __init__(self, type, color, state=None):
-        super().__init__(type, color, state=state)
+    def __init__(self, type_, color, state=None):
+        self.type = type_
+        self.color = color
+        self.state = state
         self.contains = None
         # self.pos = None
 
-    def to_idx_array(self):
-        if hasattr(self, 'STATES'):
-            state_idx = self.STATES.index(self.state)
-        else:
-            state_idx = 0
-        return np.array([
-            OBJECTS.index(self.type) + 1,  # 0 is reserved for empty
-            COLORS.index(self.color),
-            state_idx
-        ])
+    def encode(self):
+        return [self.type, self.color, self.state]
 
     def can_overlap(self):
         """Can the agent overlap with this?"""
@@ -177,7 +162,7 @@ class Door(WorldObj):
 
     STATES = ['open', 'closed', 'locked']
 
-    def __init__(self, color, state='closed'):
+    def __init__(self, color='blue', state='closed'):
         super().__init__('door', color)
         self.state = state
 
