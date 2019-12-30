@@ -122,7 +122,7 @@ class MiniGridEnv(gym.Env):
 
         # Range of possible rewards
         self._step_reward = -1
-        self._win_reward = 0
+        self._win_reward = 100
         self._lose_reward = -100
         self.reward_range = (self._lose_reward, self._win_reward)
 
