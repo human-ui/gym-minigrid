@@ -132,6 +132,7 @@ class MiniGridEnv(gym.Env):
         # self._decoder = Enc()
 
         # Initialize the RNG
+        self.initial_seed = seed
         self.seed(seed=seed)
 
         # Initialize the state
