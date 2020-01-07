@@ -121,7 +121,10 @@ class MiniGridEnv(gym.Env):
         )
 
         # Range of possible rewards
-        self.reward_range = (0, 1)
+        self._step_reward = -1
+        self._win_reward = 100
+        self._lose_reward = -100
+        self.reward_range = (self._lose_reward, self._win_reward)
 
         # Environment configuration
         self.height = height
@@ -148,12 +151,6 @@ class MiniGridEnv(gym.Env):
 
     def _gen_grid(self, height, width):
         raise NotImplementedError('_gen_grid needs to be implemented by each environment')
-
-    def _reward(self):
-        """
-        Compute the reward to be given upon success
-        """
-        return 1 - .9 * (self.step_count / self.max_steps)
 
     @property
     def shape(self):
@@ -471,7 +468,7 @@ class MiniGridEnv(gym.Env):
 
     def step(self, action):
         self.step_count += 1
-        reward = 0
+        reward = self._step_reward
         done = False
 
         # Get the position in front of the agent
@@ -496,9 +493,10 @@ class MiniGridEnv(gym.Env):
             if fwd_cell.entity is not None:
                 if fwd_cell.entity.type == 'goal':
                     done = True
-                    reward = self._reward()
+                    reward = self._win_reward
                 if fwd_cell.entity.type == 'lava':
                     done = True
+                    reward = self._lose_reward
 
         # Pick up an object
         elif action == 'pickup':

@@ -102,27 +102,6 @@ class StateBonus(gym.core.Wrapper):
         return self.env.reset(**kwargs)
 
 
-class FixedGoalReward(gym.core.Wrapper):
-    """
-    Always reward 1 for reaching goal, and small negative
-    reward for intermediate steps
-    """
-
-    def __init__(self, env):
-        super().__init__(env)
-
-    def step(self, action):
-        obs, reward, done, info = self.env.step(action)
-        if reward > 0:
-            if not done:
-                raise NotImplementedError('Expecting non-zero reward only if done')
-            reward = 0.
-        else:
-            # Standard setup - receive -1 as long as not in finish (torture:()
-            reward = -1
-        return obs, reward, done, info
-
-
 class ImgObsWrapper(gym.core.ObservationWrapper):
     """
     Use the image as the only observation output, no language/mission.
