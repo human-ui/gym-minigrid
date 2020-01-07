@@ -121,7 +121,10 @@ class MiniGridEnv(gym.Env):
         )
 
         # Range of possible rewards
-        self.reward_range = (0, 1)
+        self._step_reward = -1
+        self._win_reward = 100
+        self._lose_reward = -100
+        self.reward_range = (self._lose_reward, self._win_reward)
 
         # Environment configuration
         self.height = height
@@ -132,6 +135,7 @@ class MiniGridEnv(gym.Env):
         # self._decoder = Enc()
 
         # Initialize the RNG
+        self.initial_seed = seed
         self.seed(seed=seed)
 
         # Initialize the state
@@ -147,12 +151,6 @@ class MiniGridEnv(gym.Env):
 
     def _gen_grid(self, height, width):
         raise NotImplementedError('_gen_grid needs to be implemented by each environment')
-
-    def _reward(self):
-        """
-        Compute the reward to be given upon success
-        """
-        return 1 - .9 * (self.step_count / self.max_steps)
 
     @property
     def shape(self):
@@ -198,9 +196,6 @@ class MiniGridEnv(gym.Env):
     def __setitem__(self, pos, obj):
         if isinstance(obj, MiniGridEnv):
             from_, to_ = self._slices(pos)
-            # if not isinstance(pos[0], slice) and not isinstance(pos[1], slice):
-            #     self._grid[pos] = obj
-            # else:
             self.grid[from_] = obj.grid[to_]
         elif isinstance(obj, Cell):
             self.grid[pos] = obj
@@ -270,7 +265,11 @@ class MiniGridEnv(gym.Env):
         return array
 
     def encode_obs(self):
-        array = self.encode(mask=self.visible())
+        mask = self.visible()
+        array = self.encode(mask=mask)
+        inds = np.ones(len(array), dtype=bool)
+        inds[self._encoder.cell['visible']] = False
+        array[inds] *= mask
         return array[self._encoder.obs_inds]
 
     def decode(self, array, observation=False):
@@ -469,7 +468,7 @@ class MiniGridEnv(gym.Env):
 
     def step(self, action):
         self.step_count += 1
-        reward = 0
+        reward = self._step_reward
         done = False
 
         # Get the position in front of the agent
@@ -494,9 +493,10 @@ class MiniGridEnv(gym.Env):
             if fwd_cell.entity is not None:
                 if fwd_cell.entity.type == 'goal':
                     done = True
-                    reward = self._reward()
+                    reward = self._win_reward
                 if fwd_cell.entity.type == 'lava':
                     done = True
+                    reward = self._lose_reward
 
         # Pick up an object
         elif action == 'pickup':

@@ -446,9 +446,9 @@ class Fetch(MiniGridEnv):
         if self.agent.is_carrying:
             if self.agent.carrying.color == self.target_color and \
                self.agent.carrying.type == self.target_type:
-                reward = self._reward()
+                reward = self._win_reward
             else:
-                reward = 0
+                reward = self._lose_reward
             done = True
 
         return obs, reward, done, info
@@ -511,14 +511,16 @@ class GoToObject(MiniGridEnv):
 
         # Toggle/pickup action terminates the episode
         if self.actions[action] == 'toggle':
+            reward = self._lose_reward
             done = True
 
         # Reward performing the done action next to the target object
         ai, aj = self.agent.pos
         ti, tj = self.target.pos
         if self.actions[action] == 'done':
+            reward = self._lose_reward
             if abs(ai - ti) <= 1 and abs(aj - tj) <= 1:
-                reward = self._reward()
+                reward = self._win_reward
             done = True
 
         return obs, reward, done, info
@@ -583,12 +585,14 @@ class GoToDoor(MiniGridEnv):
 
         # Don't let the agent open any of the doors
         if self.actions[action] == 'toggle':
+            reward = self._lose_reward
             done = True
 
         # Reward performing done action in front of the target door
         if self.actions[action] == 'done':
+            reward = self._lose_reward
             if (ai == ti and abs(aj - tj) == 1) or (aj == tj and abs(ai - ti) == 1):
-                reward = self._reward()
+                reward = self._win_reward
             done = True
 
         return obs, reward, done, info
@@ -688,13 +692,15 @@ class PutNear(MiniGridEnv):
         # If we picked up the wrong object, terminate the episode
         if self.actions[action] == 'pickup' and self.agent.is_carrying:
             if self.agent.carrying.type != self.move_type or self.agent.carrying.color != self.move_color:
+                reward = self._lose_reward
                 done = True
 
         # If successfully dropping an object near the target
         if self.actions[action] == 'drop' and pre_carrying:
+            reward = self._lose_reward
             if self[oj, oi] is pre_carrying:
                 if abs(oi - ti) <= 1 and abs(oj - tj) <= 1:
-                    reward = self._reward()
+                    reward = self._win_reward
             done = True
 
         return obs, reward, done, info
@@ -750,15 +756,15 @@ class RedBlueDoor(MiniGridEnv):
 
         if blue_door_opened_after:
             if red_door_opened_before:
-                reward = self._reward()
+                reward = self._win_reward
                 done = True
             else:
-                reward = 0
+                reward = self._lose_reward
                 done = True
 
         elif red_door_opened_after:
             if blue_door_opened_before:
-                reward = 0
+                reward = self._lose_reward
                 done = True
 
         return obs, reward, done, info
@@ -851,10 +857,10 @@ class Memory(MiniGridEnv):
         obs, reward, done, info = super().step(action)
 
         if tuple(self.agent.pos) == self.success_pos:
-            reward = self._reward()
+            reward = self._win_reward
             done = True
         if tuple(self.agent.pos) == self.failure_pos:
-            reward = 0
+            reward = self._lose_reward
             done = True
 
         return obs, reward, done, info
@@ -1019,7 +1025,7 @@ class KeyCorridor(RoomGrid):
         if self.actions[action] == 'pickup':
             if self.agent.is_carrying:
                 if self.agent.carrying is self.obj:
-                    reward = self._reward()
+                    reward = self._win_reward
                     done = True
 
         return obs, reward, done, info
@@ -1058,7 +1064,7 @@ class Unlock(RoomGrid):
 
         if self.actions[action] == 'toggle':
             if self.door.is_open:
-                reward = self._reward()
+                reward = self._win_reward
                 done = True
 
         return obs, reward, done, info
@@ -1100,7 +1106,7 @@ class UnlockPickup(RoomGrid):
         if self.actions[action] == 'pickup':
             if self.agent.is_carrying:
                 if self.agent.carrying is self.obj:
-                    reward = self._reward()
+                    reward = self._win_reward
                     done = True
 
         return obs, reward, done, info
@@ -1144,7 +1150,7 @@ class BlockedUnlockPickup(RoomGrid):
         if self.actions[action] == 'pickup':
             if self.agent.is_carrying:
                 if self.agent.carrying is self.obj:
-                    reward = self._reward()
+                    reward = self._win_reward
                     done = True
 
         return obs, reward, done, info
@@ -1191,7 +1197,7 @@ class _ObstructedMaze(RoomGrid):
         if self.actions[action] == 'pickup':
             if self.agent.is_carrying:
                 if self.agent.carrying is self.obj:
-                    reward = self._reward()
+                    reward = self._win_reward
                     done = True
 
         return obs, reward, done, info
@@ -1547,7 +1553,6 @@ class DynamicObstacles(MiniGridEnv):
         )
         # Allow only 3 actions permitted: left, right, forward
         self.action_space = gym.spaces.Discrete(3)
-        self.reward_range = (-1, 1)
 
     def _gen_grid(self, height, width):
         # Create an empty grid
@@ -1587,7 +1592,7 @@ class DynamicObstacles(MiniGridEnv):
 
         # If the agent tries to walk over an obstacle
         if self.actions[action] == 'forward' and not_clear:
-            reward = -1
+            reward = self._lose_reward
             done = True
             return obs, reward, done, info
 
