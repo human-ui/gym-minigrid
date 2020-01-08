@@ -270,9 +270,7 @@ class MiniGridEnv(gym.Env):
     def encode_obs(self):
         mask = self.visible()
         array = self.encode(mask=mask)
-        inds = np.ones(len(array), dtype=bool)
-        inds[self._encoder.cell['visible']] = False
-        array[inds] *= mask
+        array *= mask
         return array[self._encoder.obs_inds]
 
     def decode(self, array, observation=False):
