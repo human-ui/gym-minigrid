@@ -95,4 +95,4 @@ class Window(QMainWindow):
         if done:
             self.reset()
         self.render()
-        return obs, reward, done, reset_mask
+        return obs, reward, done, (reset_mask,)
