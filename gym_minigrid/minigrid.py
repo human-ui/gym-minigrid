@@ -56,7 +56,14 @@ class Grid(object):
             raise AttributeError(f'No attribute {attr}')
 
     def __getitem__(self, pos):
-        return self._grid[tuple(pos)]
+        try:
+            cond = pos[0] < 0 or pos[0] >= self.shape[0] or pos[1] < 0 or pos[1] >= self.shape[1]
+            if cond:
+                return
+            else:
+                return self._grid[tuple(pos)]
+        except:
+            return self._grid[tuple(pos)]
 
     def __setitem__(self, pos, obj):
         self._grid[tuple(pos)] = obj
@@ -448,21 +455,24 @@ class MiniGridEnv(gym.Env):
 
     def move_agent(self, pos):
         cell = self[pos]
-        if cell.entity is None or cell.entity.can_overlap():
-            self.agent.pos = pos
+        if cell is not None:
+            if cell.entity is None or cell.entity.can_overlap():
+                self.agent.pos = pos
 
     def pickup(self, pos):
         cell = self[pos]
-        if cell.entity is not None:
-            if cell.entity.can_pickup() and not self.agent.is_carrying:
-                self.agent.carrying = cell.entity
-                self[pos].clear()
+        if cell is not None:
+            if cell.entity is not None:
+                if cell.entity.can_pickup() and not self.agent.is_carrying:
+                    self.agent.carrying = cell.entity
+                    self[pos].clear()
 
     def drop(self, pos):
         cell = self[pos]
-        if cell.entity is None and self.agent.is_carrying:
-            self[pos] = self.agent.carrying
-            self.agent.carrying = None
+        if cell is not None:
+            if cell.entity is None and self.agent.is_carrying:
+                self[pos] = self.agent.carrying
+                self.agent.carrying = None
 
     def step(self, action):
         self.step_count += 1
@@ -488,13 +498,14 @@ class MiniGridEnv(gym.Env):
         # Move forward
         elif action == 'forward':
             self.move_agent(fwd_pos)
-            if fwd_cell.entity is not None:
-                if fwd_cell.entity.type == 'goal':
-                    done = True
-                    reward = self._win_reward
-                if fwd_cell.entity.type == 'lava':
-                    done = True
-                    reward = self._lose_reward
+            if fwd_cell is not None:
+                if fwd_cell.entity is not None:
+                    if fwd_cell.entity.type == 'goal':
+                        done = True
+                        reward = self._win_reward
+                    if fwd_cell.entity.type == 'lava':
+                        done = True
+                        reward = self._lose_reward
 
         # Pick up an object
         elif action == 'pickup':
@@ -506,8 +517,9 @@ class MiniGridEnv(gym.Env):
 
         # Toggle/activate an object
         elif action == 'toggle':
-            if fwd_cell.entity is not None:
-                fwd_cell.entity.toggle(self, fwd_pos)
+            if fwd_cell is not None:
+                if fwd_cell.entity is not None:
+                    fwd_cell.entity.toggle(self, fwd_pos)
 
         # Done action (not used by default)
         elif action == 'done':
