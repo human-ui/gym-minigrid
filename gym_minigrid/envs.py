@@ -4,7 +4,8 @@ import gym
 
 from gym_minigrid.minigrid import Grid, MiniGridEnv
 from gym_minigrid.roomgrid import RoomGrid
-from gym_minigrid.entities import Goal, Wall, Door, Key, Ball, Box, Lava, COLORS
+import gym_minigrid.entities as entities
+from gym_minigrid.entities import Goal, Wall, Door, Key, Ball, Box, Lava, COLORS, OBJECTS
 
 
 class Empty(MiniGridEnv):
@@ -1656,9 +1657,6 @@ class Playground(MiniGridEnv):
                     color = self.rng.choice(COLORS)
                     self[pos] = Door(color)
 
-        # Randomize the player start position and orientation
-        self.place_agent()
-
         # Place random objects in the world
         types = ['key', 'ball', 'box']
         for i in range(0, 12):
@@ -1672,12 +1670,60 @@ class Playground(MiniGridEnv):
                 obj = Box(obj_color)
             self.place_obj(obj)
 
+        # Randomize the player start position and orientation
+        self.place_agent()
+
         # No explicit mission in this environment
         self.mission = ''
 
-    def step(self, action):
-        obs, reward, done, info = super().step(action)
-        return obs, reward, done, info
+
+class RandomObjects(MiniGridEnv):
+    """
+    This environment is a blank grid filled with randomly placed objects (including wall elements). Useful for curriculum learning as the first learning stage.
+    """
+
+    def __init__(self, size=16, max_steps=1000, **kwargs):
+        super().__init__(height=size, width=size, max_steps=max_steps, **kwargs)
+
+    def _gen_grid(self, height, width):
+        # Create an empty grid
+        self.grid = Grid(height, width)
+
+        # Place a goal square at a random location
+        self.place_obj(Goal())
+
+        # Place random objects in the world
+        mean_n_objs = int(height * width * .2)
+        n_objs = int(self.rng.normal(mean_n_objs, mean_n_objs // 2))
+        n_objs = np.clip(n_objs, mean_n_objs // 5, mean_n_objs * 9 // 5)
+        for i in range(n_objs):
+            obj = self.make_obj()
+            self.place_obj(obj)
+
+        # Randomize the player start position and orientation
+        self.place_agent()
+
+        self.mission = 'get to a green goal square'
+
+    def make_obj(self):
+        type_ = self.rng.choice(OBJECTS)
+        color = self.rng.choice(COLORS)
+
+        if type_ in ['wall', 'goal', 'lava']:
+            obj = entities.make(type_)
+        elif type_ == 'door':
+            state = self.rng.choice(entities.Door.STATES)
+            obj = entities.make(type_, color=color, state=state)
+        elif type_ == 'box':
+            if self.rng.random() < .5:
+                contains = None
+            else:
+                contains = self.make_obj()
+            obj = entities.make(type_, color=color, contains=contains)
+        else:
+            obj = entities.make(type_, color=color)
+
+        return obj
 
 
 # Register all environments with OpenAI gym
