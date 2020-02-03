@@ -1693,7 +1693,7 @@ class RandomObjects(MiniGridEnv):
         self.place_obj(Goal())
 
         # Place random objects in the world
-        mean_n_objs = int(height * width * .2)
+        mean_n_objs = int(height * width * .4)
         n_objs = int(self.rng.normal(mean_n_objs, mean_n_objs // 2))
         n_objs = np.clip(n_objs, mean_n_objs // 5, mean_n_objs * 9 // 5)
         for i in range(n_objs):
@@ -1701,7 +1701,7 @@ class RandomObjects(MiniGridEnv):
             self.place_obj(obj)
 
         # Randomize the player start position and orientation
-        self.place_agent()
+        self.place_agent(top=(height // 2, width // 2), size=(4, 4))
 
         self.mission = 'get to a green goal square'
 
