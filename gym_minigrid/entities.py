@@ -230,7 +230,7 @@ class Box(WorldObj):
 class Goal(WorldObj):
 
     def __init__(self, color='green'):
-        super().__init__('goal', 'green')
+        super().__init__('goal', color)
 
     def can_overlap(self):
         return True
