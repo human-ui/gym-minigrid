@@ -31,13 +31,35 @@ class Encoder(object):
             count += len(values)
 
         if observation:
-            o = [i for i,k in enumerate(self.keys) if k not in SKIP and k.split('.')[0] not in SKIP]
+            o = [i for i,k in enumerate(self.keys) if self._keep(k)]
             self.obs_inds = np.array(o)
         else:
             self.obs_inds = np.arange(len(self.keys))
 
+        self._slices()
+
     def __len__(self):
         return len(self.obs_inds)
+
+    def _slices(self):
+        count = 0
+        slices = {}
+        for attr, values in ATTRS.items():
+            if attr in ['cell', 'agent']:
+                for value in values:
+                    attr_name = f'{attr}.{value}'
+                    if self._keep(attr_name):
+                        slices[attr_name] = slice(count, count + 1)
+                        count += 1
+            else:
+                if self._keep(attr):
+                    slices[attr] = slice(count, count + len(values))
+                    count += len(values)
+
+        self.slices = slices
+
+    def _keep(self, key):
+        return key not in SKIP and key.split('.')[0] not in SKIP
 
 
 class Decoder(Encoder):
