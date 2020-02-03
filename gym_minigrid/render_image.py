@@ -286,6 +286,12 @@ class MiniGridImage(Renderer):
     @draw
     def goal(self, obj):
         self.drawRect(0, 0, 32, 32)
+        # draw a star
+        self.setLineColor(*COLORS['black'])
+        self.drawLine(8, 16, 24, 16)
+        off = 2 * np.sqrt(3)
+        self.drawLine(16 - off, 10, 16 + off, 22)
+        self.drawLine(16 - off, 22, 16 + off, 10)
 
     def lava(self, obj):
         # lava is originally red, but we override it with orange
