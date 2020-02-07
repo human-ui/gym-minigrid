@@ -124,7 +124,7 @@ class MiniGridEnv(gym.Env):
             low=0,
             high=1,
             shape=(n_channels, agent_view_size, agent_view_size),
-            dtype='float'
+            dtype=int
         )
 
         # Range of possible rewards
@@ -325,7 +325,9 @@ class MiniGridEnv(gym.Env):
         return env
 
     def decode_obs(self, array):
-        return self.decode(array, observation=True)
+        # zero out cells that are not visible
+        mask = array[self._encoder.slices['cell.visible']] >= .5
+        return self.decode(array * mask, observation=True)
 
     def visible(self):
         """
