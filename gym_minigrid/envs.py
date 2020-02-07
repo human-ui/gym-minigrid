@@ -1701,7 +1701,10 @@ class RandomObjects(MiniGridEnv):
             self.place_obj(obj)
 
         # Randomize the player start position and orientation
-        self.place_agent(top=(height // 2, width // 2), size=(4, 4))
+        agent_pos = (height // 2, width // 2)
+        self[agent_pos].clear()
+        self.agent.pos = agent_pos
+        self.agent.state = self.rng.choice(self.agent.STATES)
 
         self.mission = 'get to a green goal square'
 
