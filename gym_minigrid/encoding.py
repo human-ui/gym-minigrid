@@ -88,8 +88,9 @@ class Decoder(Encoder):
 
                 if attr in ['cell', 'agent']:  # argmax does not apply
                     # single choice: False if <.5, otherwise True
-                    value = {k: v >= .5 for k,v in zip(keys, choices)}
+                    choice = {k: v >= .5 for k,v in zip(keys, choices)}
                 else:
                     # max over multiple choices
-                    value = keys[np.argmax(choices)]
-                setattr(self, attr, value)  # a convenience
+                    choice = keys[np.argmax(choices)]
+
+                setattr(self, attr, choice)  # a convenience
