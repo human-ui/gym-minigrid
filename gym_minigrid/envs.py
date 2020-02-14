@@ -1682,7 +1682,16 @@ class RandomObjects(MiniGridEnv):
     This environment is a blank grid filled with randomly placed objects (including wall elements). Useful for curriculum learning as the first learning stage.
     """
 
-    def __init__(self, size=16, max_steps=1000, **kwargs):
+    def __init__(self,
+                 size=16,
+                 density=.4,
+                 objects=OBJECTS,
+                 colors=COLORS,
+                 max_steps=1000,
+                 **kwargs):
+        self.density = density
+        self.objects = objects
+        self.colors = colors
         super().__init__(height=size, width=size, max_steps=max_steps, **kwargs)
 
     def _gen_grid(self, height, width):
@@ -1693,7 +1702,7 @@ class RandomObjects(MiniGridEnv):
         self.place_obj(Goal())
 
         # Place random objects in the world
-        mean_n_objs = int(height * width * .4)
+        mean_n_objs = int(height * width * self.density)
         n_objs = int(self.rng.normal(mean_n_objs, mean_n_objs // 2))
         n_objs = np.clip(n_objs, mean_n_objs // 5, mean_n_objs * 9 // 5)
         for i in range(n_objs):
@@ -1709,8 +1718,8 @@ class RandomObjects(MiniGridEnv):
         self.mission = 'get to a green goal square'
 
     def make_obj(self):
-        type_ = self.rng.choice(OBJECTS)
-        color = self.rng.choice(COLORS)
+        type_ = self.rng.choice(self.objects)
+        color = self.rng.choice(self.colors)
 
         if type_ in ['wall', 'goal', 'lava']:
             obj = entities.make(type_)
