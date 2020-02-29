@@ -90,9 +90,9 @@ class Window(QMainWindow):
         except ValueError:
             print(f'unknown action {action}')
 
-        obs, reward, done, reset_mask = self.env.step(action_idx)
+        obs, reward, done, info = self.env.step(action_idx)
 
         if done:
             self.reset()
         self.render()
-        return obs, reward, done, (reset_mask,)
+        return obs, reward, done, info
