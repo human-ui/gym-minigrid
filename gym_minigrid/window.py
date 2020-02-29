@@ -92,7 +92,5 @@ class Window(QMainWindow):
 
         obs, reward, done, info = self.env.step(action_idx)
 
-        if done:
-            self.reset()
         self.render()
         return obs, reward, done, info
