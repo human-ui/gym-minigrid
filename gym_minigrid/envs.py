@@ -1684,27 +1684,37 @@ class RandomObjects(MiniGridEnv):
 
     def __init__(self,
                  size=16,
-                 density=.4,
+                 density=.2,
                  objects=OBJECTS,
                  colors=COLORS,
-                 max_steps=1000,
+                 max_steps=100,
+                 surround_walls=True,
                  **kwargs):
         self.density = density
         self.objects = objects
         self.colors = colors
+        self.surround_walls = surround_walls
         super().__init__(height=size, width=size, max_steps=max_steps, **kwargs)
 
     def _gen_grid(self, height, width):
         # Create an empty grid
         self.grid = Grid(height, width)
 
+        if self.surround_walls:
+            self.horz_wall(0, 0)
+            self.horz_wall(height - 1, 0)
+            self.vert_wall(0, 0)
+            self.vert_wall(0, width - 1)
+
         # Place a goal square at a random location
         self.place_obj(Goal())
 
         # Place random objects in the world
-        mean_n_objs = int(height * width * self.density)
-        n_objs = int(self.rng.normal(mean_n_objs, mean_n_objs // 2))
-        n_objs = np.clip(n_objs, mean_n_objs // 5, mean_n_objs * 9 // 5)
+        if self.surround_walls:
+            mean_n_objs = int((height - 2) * (width - 2) * self.density)
+        else:
+            mean_n_objs = int(height * width * self.density)
+        n_objs = mean_n_objs
         for i in range(n_objs):
             obj = self.make_obj()
             self.place_obj(obj)

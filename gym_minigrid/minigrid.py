@@ -365,7 +365,7 @@ class MiniGridEnv(gym.Env):
         view_box[from_[0], from_[1]] = True
 
         if self.see_through_walls:
-            mask = np.ones(self.shape, dtype=bool)
+            mask = view_box
         else:
             mask = np.zeros(self.shape, dtype=bool)
             visited = set()
