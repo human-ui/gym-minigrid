@@ -1589,14 +1589,6 @@ class DynamicObstacles(MiniGridEnv):
         front_cell = self[self.agent.front_pos]
         not_clear = front_cell.entity is not None and front_cell.entity.type != 'goal'
 
-        obs, reward, done, info = super().step(action)
-
-        # If the agent tries to walk over an obstacle
-        if self.actions[action] == 'forward' and not_clear:
-            reward = self._lose_reward
-            done = True
-            return obs, reward, done, info
-
         # Update obstacle positions
         for i_obst in range(len(self.obstacles)):
             old_pos = self.obstacles[i_obst].pos
@@ -1607,6 +1599,14 @@ class DynamicObstacles(MiniGridEnv):
                 self[old_pos].clear()
             except RecursionError:
                 pass
+
+        obs, reward, done, info = super().step(action)
+
+        # If the agent tries to walk over an obstacle
+        if self.actions[action] == 'forward' and not_clear:
+            reward = self._lose_reward
+            done = True
+            return obs, reward, done, info
 
         return obs, reward, done, info
 
