@@ -1,4 +1,4 @@
-from gym_minigrid.minigrid import Cell, Grid, MiniGridEnv
+from gym_minigrid.minigrid import MiniGridEnv
 from gym_minigrid.entities import Ball, Box, Door, Key, COLORS, make
 
 
@@ -87,9 +87,9 @@ class RoomGrid(MiniGridEnv):
 
         return self.room_grid[i][j]
 
-    def _gen_grid(self, height, width):
+    def _gen_grid(self):
         # Create the grid
-        self.grid = Grid(height, width)
+        self.grid = self.Grid(self.height, self.width, n_envs=self.n_envs, view_size=self.view_size)
 
         self.room_grid = []
 
@@ -122,10 +122,10 @@ class RoomGrid(MiniGridEnv):
                 # Door positions
                 if j < self.num_cols - 1:
                     room.neighbors['right'] = self.room_grid[i][j + 1]
-                    room.door_pos['right'] = (self.rng.randint(i_l, i_m), j_m)
+                    room.door_pos['right'] = (self.rng.randint(i_l, i_m, size=self.n_envs), j_m)
                 if i < self.num_rows - 1:
                     room.neighbors['down'] = self.room_grid[i + 1][j]
-                    room.door_pos['down'] = (i_m, self.rng.randint(j_l, j_m))
+                    room.door_pos['down'] = (i_m, self.rng.randint(j_l, j_m, size=self.n_envs))
                 if j > 0:
                     room.neighbors['left'] = self.room_grid[i][j - 1]
                     room.door_pos['left'] = room.neighbors['left'].door_pos['right']
@@ -159,9 +159,9 @@ class RoomGrid(MiniGridEnv):
         Add a new object to room (i, j)
         """
         if kind is None:
-            kind = self.rng.choice(['key', 'ball', 'box'])
+            kind = self.rng.choice(['key', 'ball', 'box'], size=self.n_envs)
         if color is None:
-            color = self.rng.choice(COLORS)
+            color = self.rng.choice(COLORS, size=self.n_envs)
         obj = make(kind, color)
         self.place_in_room(i, j, obj)
         return obj
@@ -177,7 +177,7 @@ class RoomGrid(MiniGridEnv):
             # Need to make sure that there is a neighbor along this wall
             # and that there is not already a door
             while True:
-                door_idx = self.rng.choice(self.ORIENTATIONS)
+                door_idx = self.rng.choice(self.ORIENTATIONS, size=self.n_envs)
                 if room.neighbors[door_idx] and room.doors[door_idx] is None:
                     break
 
@@ -248,9 +248,9 @@ class RoomGrid(MiniGridEnv):
         """
 
         if i is None:
-            i = self.rng.randint(self.num_rows)
+            i = self.rng.randint(self.num_rows, size=self.n_envs)
         if j is None:
-            j = self.rng.randint(self.num_cols)
+            j = self.rng.randint(self.num_cols, size=self.n_envs)
 
         room = self.room_grid[i][j]
 
@@ -302,9 +302,9 @@ class RoomGrid(MiniGridEnv):
                 break
 
             # Pick a random room and door position
-            i = self.rng.randint(0, self.num_rows)
-            j = self.rng.randint(0, self.num_cols)
-            k = self.rng.choice(self.ORIENTATIONS)
+            i = self.rng.randint(0, self.num_rows, size=self.n_envs)
+            j = self.rng.randint(0, self.num_cols, size=self.n_envs)
+            k = self.rng.choice(self.ORIENTATIONS, size=self.n_envs)
             room = self.room_grid[i][j]
 
             # If there is already a door there, skip
@@ -314,7 +314,7 @@ class RoomGrid(MiniGridEnv):
             if room.locked or room.neighbors[k].locked:
                 continue
 
-            color = self.rng.choice(door_colors)
+            color = self.rng.choice(door_colors, size=self.n_envs)
             door = self.add_door(i, j, k, color, False)
             added_doors.append(door)
 
@@ -336,8 +336,8 @@ class RoomGrid(MiniGridEnv):
         dists = []
 
         while len(dists) < num_distractors:
-            color = self.rng.choice(COLORS)
-            type = self.rng.choice(['key', 'ball', 'box'])
+            color = self.rng.choice(COLORS, size=self.n_envs)
+            type = self.rng.choice(['key', 'ball', 'box'], size=self.n_envs)
             obj = (type, color)
 
             if all_unique and obj in objs:
@@ -347,9 +347,9 @@ class RoomGrid(MiniGridEnv):
             room_i = i
             room_j = j
             if room_i is None:
-                room_i = self.rng.randint(0, self.num_rows)
+                room_i = self.rng.randint(0, self.num_rows, size=self.n_envs)
             if room_j is None:
-                room_j = self.rng.randint(0, self.num_cols)
+                room_j = self.rng.randint(0, self.num_cols, size=self.n_envs)
 
             dist, pos = self.add_object(room_i, room_j, *obj)
 

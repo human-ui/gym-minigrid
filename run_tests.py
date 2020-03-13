@@ -3,22 +3,26 @@ import gym
 
 import gym_minigrid
 # from gym_minigrid import wrappers
-
 rng = np.random.RandomState(1337)
 
 env_list = [e for e in gym.envs.registry.env_specs if e.startswith('MiniGrid')]
 print(f'{len(env_list)} environments registered')
 
-for env_name in env_list:
-    print(f'testing {env_name}')
+# env = gym.make('MiniGrid-FourRooms-v2', seed=0, see_through_walls=True)
+# print(env)
+# breakpoint()
+# print(env)
+for env_idx, env_name in enumerate(env_list):
+    print(f'testing {env_name} {env_idx + 1}/{len(env_list)}')
 
     # Load the gym environment
+    env_name = 'MiniGrid-FourRooms-v2'
     env = gym.make(env_name, seed=1337)
     print(env)
 
     env.max_steps = min(env.max_steps, 200)
     env.reset()
-    env.render('rgb_array')
+    # env.render('rgb_array')
 
     # Verify that the same seed always produces the same environment
     for i in range(0, 5):
@@ -35,24 +39,25 @@ for env_name in env_list:
     num_episodes = 0
     while num_episodes < 5:
         # Pick a random action
-        action = rng.randint(env.action_space.n)
+        # action = rng.randint(env.action_space.n)
+        action = rng.randint(3, size=16)
 
         obs, reward, done, info = env.step(action)
 
         # Validate the agent position
-        assert env.agent.pos[0] < env.height
-        assert env.agent.pos[1] < env.width
+        assert np.all(env.agent_pos[0] < env.height)
+        assert np.all(env.agent_pos[1] < env.width)
 
         # Test observation encode/decode roundtrip
-        grid = env.decode_obs(obs)
-        obs2 = grid.encode_obs()
-        assert np.array_equal(obs, obs2)
+        # grid = env.decode_obs(obs)
+        # obs2 = grid.encode_obs()
+        # assert np.array_equal(obs, obs2)
 
-        enc = env.encode()
-        env2 = env.decode(enc)
-        enc2 = env2.encode()
-        assert np.array_equal(enc, enc2)
-        assert env == env2
+        # enc = env.encode()
+        # env2 = env.decode(enc)
+        # enc2 = env2.encode()
+        # assert np.array_equal(enc, enc2)
+        # assert env == env2
 
         # Check that the reward is within the specified range
         assert reward >= env.reward_range[0], reward
@@ -62,10 +67,11 @@ for env_name in env_list:
             num_episodes += 1
             env.reset()
 
-        env.render('rgb_array')
+        # env.render('rgb_array')
 
     # Test the close method
     env.close()
+    breakpoint()
 
     # env = gym.make(env_name, seed=1337)
     # env = wrappers.ReseedWrapper(env)

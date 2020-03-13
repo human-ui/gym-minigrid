@@ -2,18 +2,89 @@ import numpy as np
 
 from gym_minigrid import entities
 
+ATTRS = ['visible', 'empty',
+         {'object_type': ['wall', 'door', 'key', 'ball', 'box', 'goal', 'lava']},
+         {'object_color': ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'grey']},
+         {'door_state': ['open', 'closed', 'locked']},
+         'agent_pos', 'carrying',
+         {'agent_state': ['right', 'down', 'left', 'up']},
+         {'carrying_type': ['key', 'ball', 'box']},
+         {'carrying_color': ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'grey']}
+         ]
 
-ATTRS = {
-        'cell': ['visible', 'visited', 'empty'],
-        'object_type': entities.OBJECTS,
-        'object_color': entities.COLORS,
-        'object_state': entities.Door.STATES,
-        'agent': ['is_here', 'is_carrying'],
-        'agent_state': entities.Agent.STATES,
-        'carrying_type': [t for t in entities.OBJECTS if entities.make(t).can_pickup()],
-        'carrying_color': entities.COLORS
-        }
-SKIP = ['cell.visited', 'agent.is_here', 'agent_state']
+# ATTRS = {
+#         'cell': ['visible', 'visited', 'empty'],
+#         'object_type': ['wall', 'door', 'key', 'ball', 'box', 'goal', 'lava'],
+#         'object_color': ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'grey'],
+#         'object_state': ['open', 'closed', 'locked'],
+#         'agent': ['is_here', 'is_carrying'],
+#         'agent_state': ['right', 'down', 'left', 'up'],
+#         'carrying_type': ['key', 'ball', 'box'],
+#         'carrying_color': ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'grey']
+#         }
+SKIP = ['agent_pos', 'right', 'down', 'left', 'up']
+
+
+# class CONST(object):
+
+#     VISIBLE = 0
+#     VISITED = 1
+#     EMPTY = 2
+
+
+# class Indices(object):
+
+#     # __slots__ = list(ATTRS.keys())
+
+#     def __init__(self):
+#         count = 0
+#         for attr, values in ATTRS.items():
+#             inds = list(range(count, count + len(values)))
+#             setattr(self, attr, inds)  # ugly but gives fast access
+#             count += len(values)
+#         self.count = count
+
+#     def __len__(self):
+#         return len(self.count)
+
+
+class Channels(object):
+
+    # __slots__ = list(ATTRS.keys())
+
+    def __init__(self):
+        self.attrs = {}
+        count = 0
+        for attr in ATTRS:
+            if isinstance(attr, dict):
+                key = list(attr.keys())[0]
+                values = list(attr.values())[0]
+                inds = {v: i + count for i,v in enumerate(values)}
+                # if indices_only:
+                inds = np.arange(count, count + len(values))
+
+                for ind, value in zip(inds, values):
+                    if key.startswith('carrying'):
+                        k = f'carrying_{value}'
+                    else:
+                        k = value
+                    setattr(self, k, ind)
+                    self.attrs[k] = ind
+
+                count += len(values)
+
+            else:
+                key = attr
+                inds = count
+                self.attrs[key] = count
+                count += 1
+            setattr(self, key, inds)  # ugly but gives fast access
+
+        self.count = count
+        self.obs_inds = [v for k,v in self.attrs.items() if k not in SKIP]
+
+    def __len__(self):
+        return self.count
 
 
 class Encoder(object):

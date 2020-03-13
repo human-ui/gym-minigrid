@@ -1,7 +1,12 @@
-import curses
+import curses, functools
 import sty
 
 import numpy as np
+
+import gym_minigrid.encoding
+CH = gym_minigrid.encoding.Channels()
+
+ATTRS = {k:v for a in gym_minigrid.encoding.ATTRS if isinstance(a, dict) for k,v in a.items()}
 
 
 class ASCII(object):
@@ -69,73 +74,119 @@ class ASCII(object):
         return output
 
 
-class ANSI(ASCII):
+class Render(object):
 
-    # Map of object types to unicode symbols
-    OBJECT_TO_STR = {
-        'empty': '\u2588',
-        'wall': '\u2588',
-        'door': {
-            'open': '\u2337',
-            'closed': '\u2338',
-            'locked': '\u236F'
-        },
-        'key': '\u2642',
-        'ball': '\u25CF',
-        'box': '\u25EB',
-        'goal': '\u2588',  # \u26DD',  # '\u2612',
-        'lava': '\u2591',
-        'agent':
-            {
-            'right': '\u25B6',
-            'down': '\u25BC',
-            'left': '\u25C0',
-            'up': '\u25B2'
-        }
-    }
+    def __init__(self, grid):
+        self.grid = grid
 
-    def __init__(self, env):
-        super().__init__(env)
+    def get_attr(self, i, j, attr):
+        attrs = getattr(CH, attr)
+        idx = np.argmax(self.grid[attrs, i, j])
+        return ATTRS[attr][idx]
 
-    def _color(self, color, kind='fg', bright=False):
+    def convert(self):
+        canvas = np.empty((self.grid.shape[1], self.grid.shape[2]), dtype='<U20')
+
+        for i in range(self.grid.shape[1]):
+            for j in range(self.grid.shape[2]):
+                channels = self.grid[:, i, j]
+                highlight = channels[CH.visible]
+
+                if channels[CH.agent_pos]:
+                    state = self.get_attr(i, j, 'agent_state')
+                    canvas[i][j] = self.agent('red', state=state, highlight=highlight)
+
+                else:
+                    if channels[CH.empty] < .5:
+                        obj_type = self.get_attr(i, j, 'object_type')
+                        obj_color = self.get_attr(i, j, 'object_color')
+                        door_state = self.get_attr(i, j, 'door_state')
+
+                        f = getattr(self, obj_type)
+                        if obj_type != 'door':
+                            canvas[i][j] = f(obj_color, highlight=highlight)
+                        else:
+                            canvas[i][j] = f(obj_color, state=door_state, highlight=highlight)
+
+                    else:
+                        canvas[i][j] = self.empty('black', highlight=highlight)
+        return canvas
+
+
+class ANSI(Render):
+
+    def setup(func):
+        @functools.wraps(func)
+        def wrap(self, color, highlight=False, **kwargs):
+            bg_color = self._color('black', kind='bg', highlight=highlight)
+            fg_color = self._color(color, kind='fg', highlight=highlight)
+            obj = func(self, color, **kwargs)
+            return bg_color + fg_color + obj + sty.rs.all
+        return wrap
+
+    def _color(self, color, kind='fg', highlight=False):
         if color == 'grey':
             color = 'white'
 
         styling = getattr(sty, kind)
-        if bright:
+        if highlight:
             color = styling('li_' + color)
         else:
             color = styling(color)
 
         return color
 
-    def __call__(self):
-        output = ''
-        mask = self.env.visible()
-        for pos, cell in np.ndenumerate(self.env.grid):
-            bright = mask[pos]
-
-            bg_color = self._color(cell.color, kind='bg', bright=bright)
-
-            if pos == self.env.agent.pos:
-                entity = self.env.agent
-            else:
-                entity = cell.entity
-
-            if entity is not None:
-                fg_color = self._color(entity.color, kind='fg', bright=bright)
-                obj = self.OBJECT_TO_STR[entity.type]
-                if isinstance(obj, dict):
-                    obj = obj[entity.state]
-            else:
-                fg_color = self._color('black', kind='fg', bright=bright)
-                obj = self.OBJECT_TO_STR['empty']
-
-            output += bg_color + fg_color + obj + sty.rs.all
-            if pos[1] == self.env.width - 1:
-                output += '\n'
-
+    def __str__(self):
+        canvas = self.convert()
+        output = '\n'.join(''.join(item) for item in canvas)
         return output
+
+    @setup
+    def agent(self, color, state, highlight=False):
+        agent = {
+            'right': '\u25B6',
+            'down': '\u25BC',
+            'left': '\u25C0',
+            'up': '\u25B2'
+        }
+        return agent[state]
+
+    @setup
+    def empty(self, color, highlight=False):
+        return '\u2588'
+
+    @setup
+    def wall(self, color, highlight=False):
+        return '\u2588'
+
+    @setup
+    def door(self, color, state, highlight=False):
+        door = {
+            'open': '\u2337',
+            'closed': '\u2338',
+            'locked': '\u236F'
+        }
+        return door[state]
+
+    @setup
+    def key(self, color, highlight=False):
+        return '\u2642'
+
+    @setup
+    def ball(self, color, highlight=False):
+        return '\u25CF'
+
+    @setup
+    def box(self, color, highlight=False):
+        return '\u25EB'
+
+    @setup
+    def goal(self, color, highlight=False):
+        return '\u2588'
+
+    @setup
+    def lava(self, color, highlight=False):
+        return '\u2591'
 
 
 class Curses4bit(ANSI):
