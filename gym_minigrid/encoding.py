@@ -2,11 +2,13 @@ import numpy as np
 
 from gym_minigrid import entities
 
-ATTRS = ['visible', 'empty',
+ATTRS = ['visible',
+         'empty',
          {'object_type': ['wall', 'door', 'key', 'ball', 'box', 'goal', 'lava']},
          {'object_color': ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'grey']},
          {'door_state': ['open', 'closed', 'locked']},
-         'agent_pos', 'carrying',
+         'agent_pos',
+         'carrying',
          {'agent_state': ['right', 'down', 'left', 'up']},
          {'carrying_type': ['key', 'ball', 'box']},
          {'carrying_color': ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'grey']}
@@ -54,6 +56,7 @@ class Channels(object):
 
     def __init__(self):
         self.attrs = {}
+        self.inds = {}
         count = 0
         for attr in ATTRS:
             if isinstance(attr, dict):
@@ -71,17 +74,18 @@ class Channels(object):
                     setattr(self, k, ind)
                     self.attrs[k] = ind
 
+                self.attrs[key] = values
                 count += len(values)
 
             else:
                 key = attr
                 inds = count
-                self.attrs[key] = count
+                self.inds[key] = count
                 count += 1
             setattr(self, key, inds)  # ugly but gives fast access
 
         self.count = count
-        self.obs_inds = [v for k,v in self.attrs.items() if k not in SKIP]
+        self.obs_inds = [v for k,v in self.inds.items() if k not in SKIP]
 
     def __len__(self):
         return self.count
