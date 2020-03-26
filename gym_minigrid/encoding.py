@@ -55,6 +55,12 @@ class Channels(object):
     # __slots__ = list(ATTRS.keys())
 
     def __init__(self):
+        """
+        Gives access to:
+        - Indices of every attribute: Channels.wall -> 2, Channels.visible -> 0
+        - Indices of every group of attributes: Channels.object_type -> [2, 3, 4, 5, 6, 7, 8]
+        - String names of attributes as a dict: Channels.attrs['object_type'] -> ['wall', 'door', 'key', 'ball', 'box', 'goal', 'lava']
+        """
         self.attrs = {}
         self.inds = {}
         count = 0
@@ -72,7 +78,7 @@ class Channels(object):
                     else:
                         k = value
                     setattr(self, k, ind)
-                    self.attrs[k] = ind
+                    self.inds[k] = ind
 
                 self.attrs[key] = values
                 count += len(values)
@@ -82,6 +88,7 @@ class Channels(object):
                 inds = count
                 self.inds[key] = count
                 count += 1
+
             setattr(self, key, inds)  # ugly but gives fast access
 
         self.count = count
