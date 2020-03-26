@@ -1,98 +1,85 @@
 import sys
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QTextEdit
-from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, QFrame
+import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
+matplotlib.use('MacOSX')
+
+from gym_minigrid import render
 
 
-class Window(QMainWindow):
+class Window(object):
     """
     Simple application window to render the environment into
     """
 
-    KEYS = {
-        Qt.Key_Left: 'left',
-        Qt.Key_Right: 'right',
-        Qt.Key_Up: 'forward',
-        Qt.Key_Space: 'toggle',
-        Qt.Key_PageUp: 'pickup',
-        Qt.Key_PageDown: 'drop',
-        Qt.Key_Return: 'done',
-        Qt.Key_Backspace: 'reset',
-        Qt.Key_Escape: 'done'
-    }
+    KEYS = ['left', 'right', 'up', 'pageup', 'pagedown', ' ', 'enter']
 
-    def __init__(self, env, renderer):
-        super().__init__()
-
+    def __init__(self, env):
         self.env = env
-        self.renderer = renderer
+        self.renderer = render.Matplotlib()
 
-        self.setWindowTitle('MiniGrid Gym Environment')
+        # Create the figure and axes
+        self.fig, self.ax = plt.subplots()
 
-        # Image label to display the rendering
-        self.imgLabel = QLabel()
-        self.imgLabel.setFrameStyle(QFrame.Panel | QFrame.Sunken)
+        # Show the env name in the window title
+        # self.fig.canvas.set_window_title(env)
 
-        # Text box for the mission
-        self.missionBox = QTextEdit()
-        self.missionBox.setReadOnly(True)
-        self.missionBox.setMinimumSize(400, 100)
+        # Turn off x/y axis numbering/ticks
+        # self.ax.set_xticks([], [])
+        # self.ax.set_yticks([], [])
 
-        self.missionBox.setPlainText(self.env.mission)
+        # Flag indicating the window was closed
+        self.closed = False
 
-        # Center the image
-        hbox = QHBoxLayout()
-        hbox.addStretch(1)
-        hbox.addWidget(self.imgLabel)
-        hbox.addStretch(1)
+        def close_handler(evt):
+            self.closed = True
 
-        # Arrange widgets vertically
-        vbox = QVBoxLayout()
-        vbox.addLayout(hbox)
-        vbox.addWidget(self.missionBox)
+        self.fig.canvas.mpl_connect('close_event', close_handler)
+        # Keyboard handler
+        self.fig.canvas.mpl_connect('key_press_event', self.key_handler)
 
-        # Create a main widget for the window
-        mainWidget = QWidget(self)
-        self.setCentralWidget(mainWidget)
-        mainWidget.setLayout(vbox)
-
-    def show(self):
+    def show(self, block=True):
         self.render()
-        super().show()
-        self.setFocus()
 
-    def keyPressEvent(self, e):
-        action = self.KEYS.get(e.key())
-        if action is None:
-            return
-        self.keyDownCb(action)
+        # If not blocking, trigger interactive mode
+        # if not block:
+        #     plt.ion()
 
-    def reset(self):
-        self.env.reset()
-        self.missionBox.setPlainText(self.env.mission)
+        # Show the plot
+        # In non-interative mode, this enters the matplotlib event loop
+        # In interactive mode, this call does not block
+        plt.show()
 
     def render(self):
-        self.imgLabel.setPixmap(self.renderer.pixmap())
-        QApplication.processEvents()
+        array = self.env.grid.asarray()[0]
+        plt.cla()
+        self.renderer.render(array, ax=self.ax)
+        self.fig.canvas.draw()
 
-    def keyDownCb(self, action):
-        if action == 'reset':
-            self.reset()
+        # Let matplotlib process UI events
+        # This is needed for interactive mode to work properly
+        # plt.pause(0.001)
+
+    def key_handler(self, event):
+        action = event.key
+
+        if action == 'escape':
+            plt.close()
+            return
+
+        if action == 'backspace':
+            self.env.reset()
             self.render()
             return
 
-        if action == 'done':
-            sys.exit(0)
-
         try:
-            action_idx = self.env.actions.index(action)
+            action_idx = self.KEYS.index(action)
         except ValueError:
             print(f'unknown action {action}')
 
-        obs, reward, done, reset_mask = self.env.step(action_idx)
+        obs, reward, done, info = self.env.step(np.repeat(action_idx, self.env.n_envs))
 
-        if done:
-            self.reset()
+        if done[0]:
+            self.env.reset()
         self.render()
-        return obs, reward, done, (reset_mask,)
