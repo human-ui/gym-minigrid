@@ -135,7 +135,7 @@ class MiniGridEnv(gym.Env):
         self.observation_space = gym.spaces.Box(
             low=0,
             high=1,
-            shape=(n_envs, len(CH), agent_view_size, agent_view_size),
+            shape=(n_envs, len(CH.obs_inds), agent_view_size, agent_view_size),
             dtype=int
         )
 
@@ -168,11 +168,8 @@ class MiniGridEnv(gym.Env):
         # Initialize the state
         self.step_count = np.zeros(self.n_envs, dtype=int)
         self.reward = np.zeros(self.n_envs, dtype=int)
-        self.is_done = np.ones(self.n_envs, dtype=bool)
         self.reset_mask = np.zeros(self.n_envs, dtype=bool)
-        # nan so that we wouldn't log cumm_reward=0
-        self.cumm_reward = np.ones(self.n_envs) * np.nan
-
+        self.prepare_reset()
         self.reset()
         # Return first observation
         self.initial_obs = self.get_obs()
@@ -193,6 +190,12 @@ class MiniGridEnv(gym.Env):
     @property
     def steps_remaining(self):
         return self.max_steps - self.step_count
+
+    def prepare_reset(self):
+        """Put env in is_done state, so that next step will perform reset"""
+        self.is_done = np.ones(self.n_envs, dtype=bool)
+        # nan so that we wouldn't log cumm_reward=0
+        self.cumm_reward = np.ones(self.n_envs) * np.nan
 
     def reset(self, envs=None):
         # Reset step count and cummulative reward since episode start
