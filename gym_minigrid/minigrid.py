@@ -1,10 +1,9 @@
-import math, copy
+import math, copy, contextlib
 
 import numpy as np
 import gym
 
 from gym_minigrid import entities, render, encoding, window
-from gym_minigrid.encoding import ATTRS
 
 
 CH = encoding.Channels()
@@ -18,7 +17,7 @@ class MiniGridEnv(gym.Env):
     """
 
     metadata = {
-        'render.modes': ['human', 'ansi'],
+        'render.modes': ['human', 'ansi', 'rgb_array', 'ax'],
         'video.frames_per_second': 10
     }
 
@@ -38,12 +37,35 @@ class MiniGridEnv(gym.Env):
                                    height + 2 * self.padding,
                                    width + 2 * self.padding),
                                   dtype=bool)
-            envs = np.arange(n_envs).reshape(-1,1,1,1)
-            p2 = np.arange(self.padding, height + self.padding).reshape(1,1,-1,1)
-            p3 = np.arange(self.padding, width + self.padding).reshape(1,1,1,-1)
+            self._ib = np.arange(n_envs, dtype=np.intp).reshape((-1, 1, 1, 1))
+            self._ich = np.arange(len(CH), dtype=np.intp).reshape((1, -1, 1, 1))
+            self._idx = None  # all envs
+            self.set_empty()
+
+        def set_empty(self):
+            if self._idx is None:
+                envs = self._ib
+            else:
+                envs = self._idx
+
+            p2 = np.arange(self.padding, self.height + self.padding).reshape(1,1,-1,1)
+            p3 = np.arange(self.padding, self.width + self.padding).reshape(1,1,1,-1)
+            self._grid[envs, self._ich, p2, p3] = False
             self._grid[envs, CH.empty, p2, p3] = True
-            self._p2 = np.arange(self._grid.shape[2])
-            self._p3 = np.arange(self._grid.shape[3])
+
+        @contextlib.contextmanager
+        def select(self, idx):
+            """
+            Masks self._grid to use only envs that match idx.
+
+            idx must be an int or an array of indices
+            """
+            current_idx = self._idx
+            self._idx = idx
+            try:
+                yield
+            finally:
+                self._idx = current_idx
 
         def __getattr__(self, attr):
             if attr in self.__dict__:
@@ -56,14 +78,30 @@ class MiniGridEnv(gym.Env):
                 raise AttributeError(f'No attribute {attr}')
 
         def _get_pos(self, idx):
-            if isinstance(idx, (tuple, list)) and len(idx) >= 3:
+            if isinstance(idx, int):
+                if self._idx is None:
+                    return idx
+                else:
+                    return self._idx
+
+            # if envs are not masked
+            if self._idx is None:
+                pos0 = idx[0]
+            else:
+                pos0 = self._idx
+
+            if len(idx) >= 3:
                 p2 = idx[2] + self.padding
                 if len(idx) == 3:
-                    pos = (idx[0], idx[1], p2)
+                    pos = (pos0, idx[1], p2)
                 else:
                     p3 = idx[3] + self.padding
-                    pos = (idx[0], idx[1], p2, p3)
-            return pos
+                    pos = (pos0, idx[1], p2, p3)
+                return pos
+            elif len(idx) == 1:
+                return (pos0,)
+            elif len(idx) == 2:
+                return (pos0, idx[1])
 
         def __getitem__(self, idx):
             return self._grid[self._get_pos(idx)]
@@ -72,7 +110,11 @@ class MiniGridEnv(gym.Env):
             self._grid[self._get_pos(idx)] = value
 
         def asarray(self):
-            return self._grid[:, :,
+            if self._idx is None:
+                pos0 = np.s_[:]
+            else:
+                pos0 = self._idx
+            return self._grid[pos0, :,
                               self.padding: self.padding + self.height,
                               self.padding: self.padding + self.width]
 
@@ -107,9 +149,10 @@ class MiniGridEnv(gym.Env):
         self.height = height
         self.width = width
         self.n_envs = n_envs
+        # if n_envs == 1:
+        #     raise ValueError('MiniGrid only works with more than a single environment')
         self._ib = np.arange(self.n_envs, dtype=np.intp).reshape((-1, 1, 1, 1))  # indices over batch (env) dimension
         self._ich = np.arange(len(CH), dtype=np.intp).reshape((1, -1, 1, 1))
-        self._ie = np.arange(self.n_envs, dtype=np.intp)
         self.view_size = agent_view_size
         self._ivs = np.arange(self.view_size)
         self.max_steps = max_steps
@@ -118,8 +161,21 @@ class MiniGridEnv(gym.Env):
         self.initial_seed = seed
         self.seed(seed=seed)
 
+        # Initialize the grid
+        self.grid = self.Grid(self.height, self.width, n_envs=self.n_envs, view_size=self.view_size)
+        self.agent_pos = -np.ones((self.n_envs, 2), dtype=np.intp)
+
         # Initialize the state
+        self.step_count = np.zeros(self.n_envs, dtype=int)
+        self.reward = np.zeros(self.n_envs, dtype=int)
+        self.is_done = np.ones(self.n_envs, dtype=bool)
+        self.reset_mask = np.zeros(self.n_envs, dtype=bool)
+        # nan so that we wouldn't log cumm_reward=0
+        self.cumm_reward = np.ones(self.n_envs) * np.nan
+
         self.reset()
+        # Return first observation
+        self.initial_obs = self.get_obs()
 
     def __str__(self):
         return self.render(mode='ansi')
@@ -138,29 +194,36 @@ class MiniGridEnv(gym.Env):
     def steps_remaining(self):
         return self.max_steps - self.step_count
 
-    def reset(self):
-        agent_pos = -np.ones((self.n_envs, 2), dtype=np.intp)
+    def reset(self, envs=None):
+        # Reset step count and cummulative reward since episode start
+        if envs is None:
+            envs = np.ones(self.n_envs, dtype=bool)
+        envs_to_reset = np.arange(self.n_envs)[envs]
+
+        # pretend we only have a single environment for now
+        agent_pos = self.agent_pos
+        del self.agent_pos
 
         n_envs = self.n_envs
         self.n_envs = 1
 
-        grids = []
-        for i in range(n_envs):
-            self._gen_grid()
-            grids.append(self.grid._grid)
+        for i in envs_to_reset:
+            # only update a single env inside self.grid
+            with self.grid.select(i):
+                self.grid.set_empty()
+                self._gen_grid()
             agent_pos[i] = self.agent_pos
+
+        # restore the original number of envs
         self.n_envs = n_envs
-        self.grid.n_envs = n_envs
-        self.grid._grid = np.concatenate(grids)
         self.agent_pos = agent_pos
 
-        # Step count since episode start
-        # FIXME: must only reset envs that are done
-        self.step_count = np.zeros(self.n_envs, dtype=int)
-
-        # Return first observation
-        obs = self.get_obs()
-        return obs
+        # reset state
+        self.step_count[envs] = 0
+        self.reward[envs] = 0
+        self.is_done[envs] = False
+        self.reset_mask[envs] = True
+        self.cumm_reward[envs] = np.nan
 
     def seed(self, seed=0):
         # Seed the random number generator
@@ -180,10 +243,14 @@ class MiniGridEnv(gym.Env):
             channels = channels.reshape(1, -1, 1, 1)
             if len(channels) == len(envs):
                 channels = channels[envs]
-        if isinstance(pos, (tuple, list)):
+
+        if isinstance(pos, np.ndarray):
+            pos = np.reshape(pos, (self.n_envs, -1))
+        # if pos is a tuple of indices, like (4,5), turn it into array
+        elif isinstance(pos[0], int) and isinstance(pos[1], int):
             pos = np.reshape(pos, (1, -1))
         else:
-            pos = np.reshape(pos, (self.n_envs, -1))
+            raise ValueError(f'Position {pos} not understood')
 
         if not isinstance(pos[:, 0], int):
             p0 = np.array(pos[:, 0]).reshape(-1, 1, 1, 1)
@@ -208,7 +275,10 @@ class MiniGridEnv(gym.Env):
         if envs is not None:
             if len(envs) > 0:
                 value = value[np.array(envs)]
-        return value.squeeze()
+        value = value.squeeze()
+        if self.n_envs == 1:
+            value = np.array([value])
+        return value
 
     def set_value(self, pos, value, channels=None, envs=None):
         sl = self._get_slice(pos, channels=channels, envs=envs)
@@ -307,6 +377,8 @@ class MiniGridEnv(gym.Env):
                 self.rng.randint(top[1], min(top[1] + size[1], self.width), size=self.n_envs)
             ]).T
 
+            # if self.grid._idx == 1:
+            #     breakpoint()
             envs = self.get_value(pos_tmp, channels='empty')
             pos[envs] = pos_tmp[envs]
             counter += envs.astype(int)
@@ -352,7 +424,7 @@ class MiniGridEnv(gym.Env):
         """
         Set the agent's starting point at an empty position in the grid
         """
-        pos = self._get_empty_pos('agent', top=top, size=size, max_tries=max_tries)
+        pos = self._get_empty_pos(top=top, size=size, max_tries=max_tries)
         self.set_attr(pos, 'agent_pos')
 
         if rand_dir:
@@ -428,8 +500,7 @@ class MiniGridEnv(gym.Env):
 
     # actions #############################################################
 
-    def rotate_left(self, action):
-        envs = action == 0
+    def rotate_left(self, envs):
         rots = []
         for _, this_state in ROTATIONS:
             sel = np.logical_and(self.get_value(self.agent_pos, this_state),
@@ -440,8 +511,7 @@ class MiniGridEnv(gym.Env):
             self.set_true(self.agent_pos, channels=next_state, envs=sel)
             self.set_false(self.agent_pos, channels=this_state, envs=sel)
 
-    def rotate_right(self, action):
-        envs = action == 1
+    def rotate_right(self, envs):
 
         rots = []
         for this_state, _ in ROTATIONS:
@@ -453,11 +523,11 @@ class MiniGridEnv(gym.Env):
             self.set_true(self.agent_pos, channels=next_state, envs=sel)
             self.set_false(self.agent_pos, channels=this_state, envs=sel)
 
-    def move_forward(self, action):
+    def move_forward(self, envs):
         front_pos = self.front_pos(self.agent_pos)
 
         envs = np.logical_and(
-            action == 2,
+            envs,
             np.logical_and(
                 self.is_inside(front_pos),
                 np.logical_or(
@@ -475,17 +545,25 @@ class MiniGridEnv(gym.Env):
         self.set_false(self.agent_pos, 'agent_state', envs)
 
         # move carrying objects
-        self.set_true(front_pos, 'carrying', envs=envs)
-        self.set_false(self.agent_pos, 'carrying', envs=envs)
+        is_carrying = np.logical_and(
+            envs,
+            self.get_value(self.agent_pos, 'carrying')
+        )
+        self.set_true(front_pos, 'carrying', envs=is_carrying)
+        self.set_false(self.agent_pos, 'carrying', envs=is_carrying)
 
         self.set_attr(front_pos, 'carrying_type',
-                      self.get_value(self.agent_pos, 'carrying_type'), envs=envs)
-        self.set_false(self.agent_pos, 'carrying_type', envs=envs)
+                      self.get_value(self.agent_pos, 'carrying_type'), envs=is_carrying)
+        self.set_false(self.agent_pos, 'carrying_type', envs=is_carrying)
 
         self.set_attr(front_pos, 'carrying_color',
-                      self.get_value(self.agent_pos, 'carrying_color'), envs=envs)
-        self.set_false(self.agent_pos, 'carrying_color', envs=envs)
+                      self.get_value(self.agent_pos, 'carrying_color'), envs=is_carrying)
+        self.set_false(self.agent_pos, 'carrying_color', envs=is_carrying)
 
+        # update agent's position
+        agent_state = self.get_value(front_pos,'agent_state')[0]
+        if np.sum(agent_state) != 1 and envs[0]:
+            breakpoint()
         self.agent_pos[envs] = front_pos[envs]
 
         # give reward for reaching goal and penalty for stepping into lava
@@ -502,10 +580,10 @@ class MiniGridEnv(gym.Env):
 
         return reward, done
 
-    def pickup(self, action):
+    def pickup(self, envs):
         front_pos = self.front_pos(self.agent_pos)
         envs = np.logical_and(
-            action == 3,
+            envs,
             np.logical_and(
                 self.can_pickup(front_pos),
                 np.logical_not(self.get_value(front_pos, channels='carrying'))
@@ -514,10 +592,10 @@ class MiniGridEnv(gym.Env):
 
         self._toggle_obj_carrying(front_pos, self.agent_pos, envs, from_carrying=False)
 
-    def drop(self, action):
+    def drop(self, envs):
         front_pos = self.front_pos(self.agent_pos)
         envs = np.logical_and(
-            action == 4,
+            envs,
             np.logical_and(
                 self.get_value(front_pos, channels='empty'),
                 self.get_value(self.agent_pos, channels='carrying')
@@ -526,9 +604,8 @@ class MiniGridEnv(gym.Env):
 
         self._toggle_obj_carrying(self.agent_pos, front_pos, envs, from_carrying=True)
 
-    def toggle(self, action):
+    def toggle(self, envs):
         front_pos = self.front_pos(self.agent_pos)
-        envs = action == 5
 
         door = np.logical_and(
             envs,
@@ -561,10 +638,10 @@ class MiniGridEnv(gym.Env):
         self._toggle_obj_carrying(front_pos, front_pos, box, from_carrying=True)
 
     def _toggle_obj_carrying(self, from_pos, to_pos, envs, from_carrying=True):
-        if from_carrying:
-            self.set_false(self.agent_pos, channels='carrying', envs=envs)
-        else:
-            self.set_true(self.agent_pos, channels='carrying', envs=envs)
+        # if from_carrying:
+        #     self.set_false(self.agent_pos, channels='carrying', envs=envs)
+        # else:
+        #     self.set_true(self.agent_pos, channels='carrying', envs=envs)
 
         for kind in ['type', 'color']:
             to_channels = getattr(CH, f'carrying_{kind}')
@@ -574,29 +651,39 @@ class MiniGridEnv(gym.Env):
 
             value = self.get_value(from_pos, channels=from_channels)
             self.set_false(from_pos, channels=from_channels, envs=envs)
-            if from_carrying:
-                self.set_false(from_pos, channels='carrying', envs=envs)
-                self.set_false(to_pos, channels='empty', envs=envs)
-            else:
-                self.set_true(from_pos, channels='empty', envs=envs)
-                self.set_true(to_pos, channels='carrying', envs=envs)
             self.set_value(to_pos, value, channels=to_channels, envs=envs)
+
+        if from_carrying:
+            self.set_false(from_pos, channels='carrying', envs=envs)
+            self.set_false(to_pos, channels='empty', envs=envs)
+        else:
+            self.set_true(from_pos, channels='empty', envs=envs)
+            self.set_true(to_pos, channels='carrying', envs=envs)
 
     def step(self, action):
         self.step_count += 1
 
-        self.rotate_left(action)
-        self.rotate_right(action)
-        reward, done = self.move_forward(action)
-        self.pickup(action)
-        self.drop(action)
-        self.toggle(action)
+        not_reset = np.logical_and(~self.is_done, self.step_count < self.max_steps)
+        self.reset(envs=~not_reset)
 
-        done[self.step_count >= self.max_steps] = True
+        self.rotate_left(np.logical_and(not_reset, action == 0))
+        self.rotate_right(np.logical_and(not_reset, action == 1))
+        reward, done = self.move_forward(np.logical_and(not_reset, action == 2))
+        self.pickup(np.logical_and(not_reset, action == 3))
+        self.drop(np.logical_and(not_reset, action == 4))
+        self.toggle(np.logical_and(not_reset, action == 5))
+
+        self.reward[not_reset] = reward[not_reset]
+        self.is_done[not_reset] = done[not_reset]
+        self.reset_mask[not_reset] = False
+        self.cumm_reward[not_reset] = np.nan
 
         obs = self.get_obs()
 
-        return obs, reward, done, {}
+        return (obs,
+                self.reward,
+                self.is_done,
+                {'reset': self.reset_mask, 'cumm_reward': self.cumm_reward})
 
     def visible(self):
         return self.view_box()
@@ -627,7 +714,7 @@ class MiniGridEnv(gym.Env):
         }
 
         for ori in ['right', 'down', 'left', 'up']:
-            envs = self.get_value((i, j), ori)
+            envs = self.get_value(self.agent_pos, ori)
             p0[envs] = (self._ivs + top_i[ori][:, None])[envs]
             p1[envs] = (self._ivs + top_j[ori][:, None])[envs]
         return p0, p1
@@ -667,13 +754,25 @@ class MiniGridEnv(gym.Env):
                     'mission': self.mission
                     }
 
-    def render(self, mode='human'):
+    def render(self, mode='human', env_idx=0):
         if mode == 'human':
             win = window.Window(self)
             win.show()
         elif mode == 'ansi':
             renderer = render.ANSI()
-            output = renderer.render(self.grid.asarray()[0])
+            output = renderer.render(self.grid.asarray()[env_idx])
             return str(output)
+        elif mode in ['ax', 'rgb_array']:
+            renderer = render.Matplotlib()
+            ax = renderer.render(self.grid.asarray()[env_idx])
+            # if mode == 'rgb_array':
+            #     fig = ax.get_figure()
+            #     fig.canvas.draw()
+            #     breakpoint()
+            #     rgb_array = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+            #     rgb_array = rgb_array.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+            #     return rgb_array
+            return ax
+
         else:
             raise ValueError(f'Render mode {mode} not recognized')

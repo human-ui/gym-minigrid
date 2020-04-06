@@ -136,7 +136,7 @@ class Matplotlib(Render):
     def render(self, array, ax=None):
         canvas = super().render(array)
         if ax is None:
-            ax = plt.subplot(111)
+            _, ax = plt.subplots()
 
         width = 32 * canvas.shape[1]
         height = 32 * canvas.shape[0]

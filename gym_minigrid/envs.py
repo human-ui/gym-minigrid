@@ -20,24 +20,23 @@ class Empty(MiniGridEnv):
         size=8,
         agent_start_pos=(1,1),
         agent_start_state='right',
+        max_steps=None,
         **kwargs
     ):
         self.agent_start_pos = agent_start_pos
         self.agent_start_state = agent_start_state
+        if max_steps is None:
+            max_steps = 4 * size**2
 
         super().__init__(
             height=size,
             width=size,
-            max_steps=4 * size**2,
+            max_steps=max_steps,
             **kwargs
         )
 
     def _gen_grid(self):
-        # Create an empty grid
-        self.grid = self.Grid(self.height, self.width, n_envs=self.n_envs, view_size=self.view_size)
-
         # Generate the surrounding walls
-        # breakpoint()
         self.wall_rect(0, 0, self.height, self.width)
 
         # Place a goal square in the bottom-right corner
@@ -55,15 +54,12 @@ class FourRooms(MiniGridEnv):
     Classic four room reinforcement learning environment. The agent must navigate in a maze composed of four rooms interconnected by 4 gaps in the walls. To obtain a reward, the agent must reach the green goal square. Both the agent and the goal square are randomly placed in any of the four rooms.
     """
 
-    def __init__(self, agent_pos=None, goal_pos=None, **kwargs):
+    def __init__(self, size=19, agent_pos=None, goal_pos=None, max_steps=100, **kwargs):
         self._agent_default_pos = agent_pos
         self._goal_default_pos = goal_pos
-        super().__init__(height=19, width=19, max_steps=100, **kwargs)
+        super().__init__(height=size, width=size, max_steps=max_steps, **kwargs)
 
     def _gen_grid(self):
-        # Create the grid
-        self.grid = self.Grid(self.height, self.width, n_envs=self.n_envs, view_size=self.view_size)
-
         # Generate the surrounding walls
         self.horz_wall(0, 0)
         self.horz_wall(self.height - 1, 0)
@@ -86,19 +82,19 @@ class FourRooms(MiniGridEnv):
                 # Right wall and door
                 if j + 1 < 2:
                     self.vert_wall(i_top, j_right, room_h)
-                    pos = (self.rng.randint(i_top + 1, i_bottom, size=self.n_envs), j_right)
+                    pos = (self.rng.randint(i_top + 1, i_bottom), j_right)
                     self.clear(pos)
 
                 # Bottom wall and door
                 if i + 1 < 2:
                     self.horz_wall(i_bottom, j_left, room_w)
-                    pos = (i_bottom, self.rng.randint(j_left + 1, j_right, size=self.n_envs))
+                    pos = (i_bottom, self.rng.randint(j_left + 1, j_right))
                     self.clear(pos)
 
         # Randomize the player start position and orientation
         if self._agent_default_pos is not None:
             self.set_attr(self._agent_default_pos, 'agent_pos')
-            state = self.rng.choice(ATTRS.agent_states, size=self.n_envs)  # assuming random start direction
+            state = self.rng.choice(CH.attrs['agent_state'])
             self.set_attr(self.agent_pos, 'agent_state', state)
         else:
             self.place_agent()
@@ -111,20 +107,6 @@ class FourRooms(MiniGridEnv):
         self.mission = 'Reach the goal'
 
 
-class _MultiRoom(object):
-
-    def __init__(self,
-                 top,
-                 size,
-                 entry_door_pos,
-                 exit_door_pos
-                 ):
-        self.top = top
-        self.size = size
-        self.entry_door_pos = entry_door_pos
-        self.exit_door_pos = exit_door_pos
-
-
 class MultiRoom(MiniGridEnv):
     """
     This environment has a series of connected rooms with doors that must be opened in order to get to the next room. The final room has the green goal square the agent must get to. This environment is extremely difficult to solve using RL alone. However, by gradually increasing the number of rooms and building a curriculum, the environment can be solved.
@@ -133,35 +115,38 @@ class MultiRoom(MiniGridEnv):
     def __init__(self,
                  n_rooms=6,
                  max_room_size=10,
+                 max_steps=None,
                  **kwargs
                  ):
         assert n_rooms > 0
         assert max_room_size >= 4
 
-        self.m_rooms = n_rooms
+        self.n_rooms = n_rooms
         self.max_room_size = max_room_size
+        if max_steps is None:
+            max_steps = self.n_rooms * 20
+
+        height = max_room_size * int(np.ceil(np.sqrt(n_rooms)))
+        width = height
 
         self.rooms = []
 
         super().__init__(
-            height=25,  # TODO
-            width=25,
-            max_steps=self.n_rooms * 20,
+            height=height,  # TODO
+            width=width,
+            max_steps=max_steps,
             **kwargs
         )
 
     def _gen_grid(self):
         room_list = []
 
-        # Choose a random number of rooms to generate
-        # num_rooms = self.rng.randint(self.min_num_rooms, self.max_num_rooms + 1, size=self.n_envs)
-
         while len(room_list) < self.n_rooms:
             cur_room_list = []
 
             entry_door_pos = (
-                self.rng.randint(0, self.height - 2, size=self.n_envs),
-                self.rng.randint(0, self.width - 2, size=self.n_envs)
+                self.rng.randint(0, self.height - 2),
+                self.rng.randint(0, self.width - 2)
             )
 
             # Recursively place the rooms
@@ -181,16 +166,13 @@ class MultiRoom(MiniGridEnv):
         assert len(room_list) > 0
         self.rooms = room_list
 
-        # Create the grid
-        self.grid = self.Grid(self.height, self.width, n_envs=self.n_envs, view_size=self.view_size)
-
         prev_door_color = None
 
         # For each room
         for idx, room in enumerate(room_list):
 
-            top_i, top_j = room.top
-            room_height, room_width = room.size
+            top_i, top_j = room['top']
+            room_height, room_width = room['size']
 
             # Generate the surrounding walls
             self.horz_wall(top_i, top_j, width=room_width)
@@ -201,24 +183,22 @@ class MultiRoom(MiniGridEnv):
             # If this isn't the first room, place the entry door
             if idx > 0:
                 # Pick a door color different from the previous one
-                door_colors = set(COLORS)
+                door_colors = list(CH.attrs['object_color'])
                 if prev_door_color:
                     door_colors.remove(prev_door_color)
-                # Note: the use of sorting here guarantees determinism,
-                # This is needed because Python's set is not deterministic
-                door_colors = self.rng.choice(sorted(door_colors), size=self.n_envs)
+                door_colors = self.rng.choice(door_colors)
 
-                self.set_obj(room.entry_door_pos, 'door', color=door_colors, state='closed')
+                self.set_obj(room['entry_door_pos'], 'door', color=door_colors, state='closed')
                 prev_door_color = door_colors
 
                 prev_room = room_list[idx - 1]
-                prev_room.exit_door_pos = room.entry_door_pos
+                prev_room['exit_door_pos'] = room['entry_door_pos']
 
         # Randomize the starting agent position and direction
-        self.place_agent(top=room_list[0].top, size=room_list[0].size)
+        self.place_agent(top=room_list[0]['top'], size=room_list[0]['size'])
 
         # Place the final goal in the last room
-        self.place_obj('goal', top=room_list[-1].top, size=room_list[-1].size)
+        self.place_obj('goal', top=room_list[-1]['top'], size=room_list[-1]['size'])
 
         self.mission = 'traverse the rooms to get to the goal'
 
@@ -232,8 +212,8 @@ class MultiRoom(MiniGridEnv):
         entry_door_pos
     ):
         # Choose the room size randomly
-        size_i = self.rng.randint(min_sz, max_sz + 1, size=self.n_envs)
-        size_j = self.rng.randint(min_sz, max_sz + 1, size=self.n_envs)
+        size_i = self.rng.randint(min_sz, max_sz + 1)
+        size_j = self.rng.randint(min_sz, max_sz + 1)
 
         # The first room will be at the door position
         if len(room_list) == 0:
@@ -241,23 +221,23 @@ class MultiRoom(MiniGridEnv):
         # Entry on the right
         elif entry_door_wall == 0:
             i = entry_door_pos[0]
-            top_i = self.rng.randint(i - size_i + 2, i, size=self.n_envs)
+            top_i = self.rng.randint(i - size_i + 2, i)
             top_j = entry_door_pos[1] - size_j + 1
         # Entry wall on the bottom
         elif entry_door_wall == 1:
             top_i = entry_door_pos[0] - size_i + 1
             j = entry_door_pos[1]
-            top_j = self.rng.randint(j - size_j + 2, size=self.n_envs)
+            top_j = self.rng.randint(j - size_j + 2, j)
         # Entry wall on the left
         elif entry_door_wall == 2:
             i = entry_door_pos[0]
-            top_i = self.rng.randint(i - size_i + 2, i, size=self.n_envs)
+            top_i = self.rng.randint(i - size_i + 2, i)
             top_j = entry_door_pos[1]
         # Entry wall on the top
         elif entry_door_wall == 3:
             top_i = entry_door_pos[0]
             j = entry_door_pos[1]
-            top_j = self.rng.randint(j - size_j + 2, j, size=self.n_envs)
+            top_j = self.rng.randint(j - size_j + 2, j)
         else:
             raise ValueError(f'Entry door wall index wrong: {entry_door_wall}')
 
@@ -269,22 +249,22 @@ class MultiRoom(MiniGridEnv):
 
         # If the room intersects with previous rooms, can't place it here
         for room in room_list[:-1]:
-            non_overlap = \
-                top_i + size_i < room.top[0] or \
-                room.top[0] + room.size[0] <= top_i or \
-                top_j + size_j < room.top[1] or \
-                room.top[1] + room.size[1] <= top_j
+            non_overlap = (top_i + size_i < room['top'][0]
+                           or room['top'][0] + room['size'][0] <= top_i
+                           or top_j + size_j < room['top'][1]
+                           or room['top'][1] + room['size'][1] <= top_j)
 
             if not non_overlap:
                 return False
 
         # Add this room to the list
-        room_list.append(_MultiRoom(
-            (top_i, top_j),
-            (size_i, size_j),
-            entry_door_pos,
-            None
-        ))
+        this_room = dict(
+            top=(top_i, top_j),
+            size=(size_i, size_j),
+            entry_door_pos=entry_door_pos,
+            exit_door_pos=None
+        )
+        room_list.append(this_room)
 
         # If this was the last room, stop
         if num_left == 1:
@@ -296,33 +276,33 @@ class MultiRoom(MiniGridEnv):
             # Pick which wall to place the out door on
             wall_set = set((0, 1, 2, 3))
             wall_set.remove(entry_door_wall)
-            exit_door_wall = self.rng.choice(sorted(wall_set), size=self.n_envs)
+            exit_door_wall = self.rng.choice(sorted(wall_set))
             next_entry_wall = (exit_door_wall + 2) % 4
 
             # Pick the exit door position
             # Exit on right wall
             if exit_door_wall == 0:
                 exit_door_pos = (
-                    top_i + self.rng.randint(1, size_i - 1, size=self.n_envs),
+                    top_i + self.rng.randint(1, size_i - 1),
                     top_j + size_j - 1
                 )
             # Exit on bottom wall
             elif exit_door_wall == 1:
                 exit_door_pos = (
                     top_i + size_i - 1,
-                    top_j + self.rng.randint(1, size_j - 1, size=self.n_envs)
+                    top_j + self.rng.randint(1, size_j - 1)
                 )
             # Exit on left wall
             elif exit_door_wall == 2:
                 exit_door_pos = (
-                    top_i + self.rng.randint(1, size_i - 1, size=self.n_envs),
+                    top_i + self.rng.randint(1, size_i - 1),
                     top_j
                 )
             # Exit on top wall
             elif exit_door_wall == 3:
                 exit_door_pos = (
                     top_i,
-                    top_j + self.rng.randint(1, size_j - 1, size=self.n_envs)
+                    top_j + self.rng.randint(1, size_j - 1)
                 )
             else:
                 raise ValueError
@@ -365,9 +345,6 @@ class RandomObjects(MiniGridEnv):
         super().__init__(height=size, width=size, max_steps=max_steps, **kwargs)
 
     def _gen_grid(self):
-        # Create an empty grid
-        self.grid = self.Grid(self.height, self.width, view_size=self.view_size)
-
         # Generate the surrounding walls
         if self.surround_walls:
             self.horz_wall(0, 0)
@@ -393,7 +370,6 @@ class RandomObjects(MiniGridEnv):
         self.set_attr(agent_pos, 'agent_pos')
         state = self.rng.choice(CH.attrs['agent_state'])
         self.set_attr(agent_pos, 'agent_state', state)
-
         self.mission = ''
 
     def make_obj(self):
