@@ -23,7 +23,7 @@ class Window(object):
         self.fig, self.ax = plt.subplots()
 
         # Show the env name in the window title
-        # self.fig.canvas.set_window_title(env)
+        self.fig.canvas.set_window_title(env.spec.id)
 
         # Turn off x/y axis numbering/ticks
         # self.ax.set_xticks([], [])
