@@ -3,7 +3,6 @@ import sys
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
-matplotlib.use('MacOSX')
 
 from gym_minigrid import render
 
