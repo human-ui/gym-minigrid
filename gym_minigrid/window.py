@@ -1,6 +1,6 @@
 import sys
 
-import numpy as np
+import torch
 import matplotlib
 import matplotlib.pyplot as plt
 
@@ -77,7 +77,8 @@ class Window(object):
         except ValueError:
             print(f'unknown action {action}')
 
-        obs, reward, done, info = self.env.step(np.repeat(action_idx, self.env.n_envs))
+        actions = torch.repeat_interleaved(torch.tensor(action_idx, dtype=torch.uint8, device=self.env.device), self.env.n_envs)
+        obs, reward, done, info = self.env.step(actions)
 
         if done[0]:
             self.env.reset()

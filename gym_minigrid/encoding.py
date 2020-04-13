@@ -1,6 +1,4 @@
-import numpy as np
-
-from gym_minigrid import entities
+import torch
 
 ATTRS = ('visible',
          'empty',
@@ -18,13 +16,15 @@ SKIP = ('agent_pos', 'right', 'down', 'left', 'up')
 
 class Channels(object):
 
-    def __init__(self):
+    def __init__(self, device='cpu'):
         """
         Gives access to:
         - Indices of every attribute: Channels.wall -> 2, Channels.visible -> 0
         - Indices of every group of attributes: Channels.object_type -> [2, 3, 4, 5, 6, 7, 8]
         - String names of attributes as a dict: Channels.attrs['object_type'] -> ['wall', 'door', 'key', 'ball', 'box', 'goal', 'lava']
         """
+        self.device = device
+
         self.attrs = {}
         self.inds = {}
         count = 0
@@ -34,7 +34,7 @@ class Channels(object):
                 values = list(attr.values())[0]
                 inds = {v: i + count for i,v in enumerate(values)}
                 # if indices_only:
-                inds = np.arange(count, count + len(values))
+                inds = torch.arange(count, count + len(values), dtype=torch.long, device=self.device)
 
                 for ind, value in zip(inds, values):
                     if key.startswith('carrying'):

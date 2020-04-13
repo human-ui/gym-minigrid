@@ -1,13 +1,9 @@
-import sys, itertools, operator, inspect
-import numpy as np
+import sys, itertools, operator, inspect, math
+import torch
 import gym
 
 from gym_minigrid.minigrid import MiniGridEnv
-import gym_minigrid.entities as entities
 from gym_minigrid import encoding
-from gym_minigrid.encoding import ATTRS
-
-CH = encoding.Channels()
 
 
 class Empty(MiniGridEnv):
@@ -82,19 +78,19 @@ class FourRooms(MiniGridEnv):
                 # Right wall and door
                 if j + 1 < 2:
                     self.vert_wall(i_top, j_right, room_h)
-                    pos = (self.rng.randint(i_top + 1, i_bottom), j_right)
+                    pos = (self.randint(i_top + 1, i_bottom), j_right)
                     self.clear(pos)
 
                 # Bottom wall and door
                 if i + 1 < 2:
                     self.horz_wall(i_bottom, j_left, room_w)
-                    pos = (i_bottom, self.rng.randint(j_left + 1, j_right))
+                    pos = (i_bottom, self.randint(j_left + 1, j_right))
                     self.clear(pos)
 
         # Randomize the player start position and orientation
         if self._agent_default_pos is not None:
             self.set_attr(self._agent_default_pos, 'agent_pos')
-            state = self.rng.choice(CH.attrs['agent_state'])
+            state = self.random_choice(self.CH.attrs['agent_state'])
             self.set_attr(self.agent_pos, 'agent_state', state)
         else:
             self.place_agent()
@@ -126,13 +122,13 @@ class MultiRoom(MiniGridEnv):
         if max_steps is None:
             max_steps = self.n_rooms * 20
 
-        height = max_room_size * int(np.ceil(np.sqrt(n_rooms)))
+        height = max_room_size * int(math.ceil(math.sqrt(n_rooms)))
         width = height
 
         self.rooms = []
 
         super().__init__(
-            height=height,  # TODO
+            height=height,
             width=width,
             max_steps=max_steps,
             **kwargs
@@ -145,8 +141,8 @@ class MultiRoom(MiniGridEnv):
             cur_room_list = []
 
             entry_door_pos = (
-                self.rng.randint(0, self.height - 2),
-                self.rng.randint(0, self.width - 2)
+                self.randint(self.height - 2),
+                self.randint(self.width - 2)
             )
 
             # Recursively place the rooms
@@ -183,10 +179,10 @@ class MultiRoom(MiniGridEnv):
             # If this isn't the first room, place the entry door
             if idx > 0:
                 # Pick a door color different from the previous one
-                door_colors = list(CH.attrs['object_color'])
+                door_colors = list(self.CH.attrs['object_color'])
                 if prev_door_color:
                     door_colors.remove(prev_door_color)
-                door_colors = self.rng.choice(door_colors)
+                door_colors = self.random_choice(door_colors)
 
                 self.set_obj(room['entry_door_pos'], 'door', color=door_colors, state='closed')
                 prev_door_color = door_colors
@@ -212,8 +208,8 @@ class MultiRoom(MiniGridEnv):
         entry_door_pos
     ):
         # Choose the room size randomly
-        size_i = self.rng.randint(min_sz, max_sz + 1)
-        size_j = self.rng.randint(min_sz, max_sz + 1)
+        size_i = self.randint(min_sz, max_sz + 1)
+        size_j = self.randint(min_sz, max_sz + 1)
 
         # The first room will be at the door position
         if len(room_list) == 0:
@@ -221,23 +217,23 @@ class MultiRoom(MiniGridEnv):
         # Entry on the right
         elif entry_door_wall == 0:
             i = entry_door_pos[0]
-            top_i = self.rng.randint(i - size_i + 2, i)
+            top_i = self.randint(i - size_i + 2, i)
             top_j = entry_door_pos[1] - size_j + 1
         # Entry wall on the bottom
         elif entry_door_wall == 1:
             top_i = entry_door_pos[0] - size_i + 1
             j = entry_door_pos[1]
-            top_j = self.rng.randint(j - size_j + 2, j)
+            top_j = self.randint(j - size_j + 2, j)
         # Entry wall on the left
         elif entry_door_wall == 2:
             i = entry_door_pos[0]
-            top_i = self.rng.randint(i - size_i + 2, i)
+            top_i = self.randint(i - size_i + 2, i)
             top_j = entry_door_pos[1]
         # Entry wall on the top
         elif entry_door_wall == 3:
             top_i = entry_door_pos[0]
             j = entry_door_pos[1]
-            top_j = self.rng.randint(j - size_j + 2, j)
+            top_j = self.randint(j - size_j + 2, j)
         else:
             raise ValueError(f'Entry door wall index wrong: {entry_door_wall}')
 
@@ -276,33 +272,33 @@ class MultiRoom(MiniGridEnv):
             # Pick which wall to place the out door on
             wall_set = set((0, 1, 2, 3))
             wall_set.remove(entry_door_wall)
-            exit_door_wall = self.rng.choice(sorted(wall_set))
+            exit_door_wall = self.random_choice(sorted(wall_set))
             next_entry_wall = (exit_door_wall + 2) % 4
 
             # Pick the exit door position
             # Exit on right wall
             if exit_door_wall == 0:
                 exit_door_pos = (
-                    top_i + self.rng.randint(1, size_i - 1),
+                    top_i + self.randint(1, size_i - 1),
                     top_j + size_j - 1
                 )
             # Exit on bottom wall
             elif exit_door_wall == 1:
                 exit_door_pos = (
                     top_i + size_i - 1,
-                    top_j + self.rng.randint(1, size_j - 1)
+                    top_j + self.randint(1, size_j - 1)
                 )
             # Exit on left wall
             elif exit_door_wall == 2:
                 exit_door_pos = (
-                    top_i + self.rng.randint(1, size_i - 1),
+                    top_i + self.randint(1, size_i - 1),
                     top_j
                 )
             # Exit on top wall
             elif exit_door_wall == 3:
                 exit_door_pos = (
                     top_i,
-                    top_j + self.rng.randint(1, size_j - 1)
+                    top_j + self.randint(1, size_j - 1)
                 )
             else:
                 raise ValueError
@@ -331,20 +327,29 @@ class RandomObjects(MiniGridEnv):
     def __init__(self,
                  size=16,
                  density=.2,
-                 objects=CH.attrs['object_type'],
-                 colors=CH.attrs['object_color'],
+                 objects=None,
+                 colors=None,
                  max_steps=100,
                  surround_walls=True,
                  **kwargs):
+
         self.density = density
-        self.objects = [o for o in objects if o != 'goal']
-        self.colors = colors
-        self.in_box_objects = CH.attrs['carrying_type']
-        self.in_box_colors = CH.attrs['carrying_color']
         self.surround_walls = surround_walls
+        self.objects = objects
+        self.colors = colors
+
         super().__init__(height=size, width=size, max_steps=max_steps, **kwargs)
 
     def _gen_grid(self):
+        if self.objects is None:
+            self.objects = [o for o in self.CH.attrs['object_type'] if o != 'goal']
+
+        if self.colors is None:
+            self.colors = self.CH.attrs['object_color']
+
+        self.in_box_objects = self.CH.attrs['carrying_type']
+        self.in_box_colors = self.CH.attrs['carrying_color']
+
         # Generate the surrounding walls
         if self.surround_walls:
             self.horz_wall(0, 0)
@@ -368,24 +373,27 @@ class RandomObjects(MiniGridEnv):
         agent_pos = (self.height // 2, self.width // 2)
         self.clear(agent_pos)
         self.set_attr(agent_pos, 'agent_pos')
-        state = self.rng.choice(CH.attrs['agent_state'])
+        state = self.random_choice(self.CH.attrs['agent_state'])
         self.set_attr(agent_pos, 'agent_state', state)
         self.mission = ''
 
     def make_obj(self):
-        type_ = self.rng.choice(self.objects)
-        color = self.rng.choice(self.colors)
+        type_ = self.random_choice(self.objects)
+        color = self.random_choice(self.colors)
         if type_ == 'door':
-            state = self.rng.choice(CH.attrs['door_state'])
+            state = self.random_choice(self.CH.attrs['door_state'])
         else:
             state = None
 
         pos = self.place_obj(type_, color=color, state=state)
+        # if pos[0,0] == 4 and pos[0,1] == 2:
+        #     breakpoint()
 
         if type_ == 'box':
-            if self.rng.random() < .5:
-                in_box_type = self.rng.choice(self.in_box_objects)
-                in_box_color = self.rng.choice(self.in_box_colors)
+            sel = torch.rand(1, generator=self.rng, dtype=torch.float32, device=self.device)
+            if sel.item() < .5:
+                in_box_type = self.random_choice(self.in_box_objects)
+                in_box_color = self.random_choice(self.in_box_colors)
                 self.set_carrying_obj(pos, in_box_type, color=in_box_color)
 
 

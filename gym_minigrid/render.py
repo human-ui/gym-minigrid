@@ -9,9 +9,8 @@ from matplotlib.collections import PatchCollection
 from matplotlib.transforms import Affine2D
 import matplotlib.pyplot as plt
 
-from gym_minigrid import window
-import gym_minigrid.encoding
-CH = gym_minigrid.encoding.Channels()
+from gym_minigrid import window, encoding
+CH = encoding.Channels()
 
 
 class Render(object):
@@ -23,6 +22,7 @@ class Render(object):
             idx = np.argmax(array[attrs, i, j])
             return CH.attrs[attr][idx]
 
+        array = array.cpu().numpy()
         canvas = np.empty((array.shape[1], array.shape[2]), dtype=np.object)
 
         for i in range(array.shape[1]):
