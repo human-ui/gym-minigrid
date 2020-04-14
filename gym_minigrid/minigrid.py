@@ -11,6 +11,13 @@ ACTIONS = ['left', 'right', 'forward', 'pickup', 'drop', 'toggle', 'done']
 ROTATIONS = (('up', 'right'), ('right', 'down'), ('down', 'left'), ('left', 'up'))
 
 
+def check_if_needed(func):
+    def wrapper(envs):
+        if np.any(envs):
+            return func(envs)
+    return func
+
+
 class MiniGridEnv(gym.Env):
     """
     2D grid world game environment
@@ -149,10 +156,7 @@ class MiniGridEnv(gym.Env):
         self.height = height
         self.width = width
         self.n_envs = n_envs
-        # if n_envs == 1:
-        #     raise ValueError('MiniGrid only works with more than a single environment')
         self._ib_flat = np.arange(self.n_envs)
-
         self._ib = self._ib_flat.reshape((-1, 1, 1, 1))  # indices over batch (env) dimension
         self._ich = np.arange(len(CH), dtype=np.intp).reshape((1, -1, 1, 1))
         self.view_size = agent_view_size
@@ -230,7 +234,7 @@ class MiniGridEnv(gym.Env):
         self.reset_mask[envs] = True
         self.cumm_reward[envs] = np.nan
 
-        self.get_obs()  # just to set visibility
+        # self.get_obs()  # just to set visibility
 
     def seed(self, seed=0):
         # Seed the random number generator
@@ -508,6 +512,7 @@ class MiniGridEnv(gym.Env):
 
     # actions #############################################################
 
+    @check_if_needed
     def rotate_left(self, envs):
         rots = []
         for _, this_state in ROTATIONS:
@@ -515,20 +520,23 @@ class MiniGridEnv(gym.Env):
             rots.append(sel)
 
         for (next_state, this_state), sel in zip(ROTATIONS, rots):
-            self.set_true(self.agent_pos, channels=next_state, envs=sel)
-            self.set_false(self.agent_pos, channels=this_state, envs=sel)
+            if np.any(sel):
+                self.set_true(self.agent_pos, channels=next_state, envs=sel)
+                self.set_false(self.agent_pos, channels=this_state, envs=sel)
 
+    @check_if_needed
     def rotate_right(self, envs):
-
         rots = []
         for this_state, _ in ROTATIONS:
             sel = envs & self.get_value(self.agent_pos, this_state)
             rots.append(sel)
 
         for (this_state, next_state), sel in zip(ROTATIONS, rots):
-            self.set_true(self.agent_pos, channels=next_state, envs=sel)
-            self.set_false(self.agent_pos, channels=this_state, envs=sel)
+            if np.any(sel):
+                self.set_true(self.agent_pos, channels=next_state, envs=sel)
+                self.set_false(self.agent_pos, channels=this_state, envs=sel)
 
+    @check_if_needed
     def move_forward(self, envs):
         front_pos = self.front_pos(self.agent_pos)
 
@@ -538,95 +546,98 @@ class MiniGridEnv(gym.Env):
             & (self.get_value(front_pos, 'empty') | self.can_overlap(front_pos))
             )
 
-        self.set_false(self.agent_pos, 'agent_pos', envs)
-        self.set_true(front_pos, 'agent_pos', envs)
-
-        state = self.get_value(self.agent_pos, 'agent_state')
-        self.set_value(front_pos, state, channels='agent_state', envs=envs)
-
-        self.set_false(self.agent_pos, 'agent_state', envs)
-
-        # move carrying objects
-        is_carrying = envs & self.get_value(self.agent_pos, 'carrying')
-        self.set_true(front_pos, 'carrying', envs=is_carrying)
-        self.set_false(self.agent_pos, 'carrying', envs=is_carrying)
-
-        self.set_attr(front_pos, 'carrying_type',
-                      self.get_value(self.agent_pos, 'carrying_type'), envs=is_carrying)
-        self.set_false(self.agent_pos, 'carrying_type', envs=is_carrying)
-
-        self.set_attr(front_pos, 'carrying_color',
-                      self.get_value(self.agent_pos, 'carrying_color'), envs=is_carrying)
-        self.set_false(self.agent_pos, 'carrying_color', envs=is_carrying)
-
-        # update agent's position
-        self.agent_pos[envs] = front_pos[envs]
-
-        # give reward for reaching goal and penalty for stepping into lava
-        is_goal = envs & self.get_value(front_pos, channels='goal')
-        is_lava = envs & self.get_value(front_pos, channels='lava')
-
         reward = np.full(self.n_envs, self._step_reward)
-        reward[is_goal] = self._win_reward
-        reward[is_lava] = self._lose_reward
-
         done = np.zeros(self.n_envs, dtype=bool)
-        done[is_goal] = True
-        done[is_lava] = True
+
+        if np.any(envs):
+            self.set_false(self.agent_pos, 'agent_pos', envs)
+            self.set_true(front_pos, 'agent_pos', envs)
+
+            state = self.get_value(self.agent_pos, 'agent_state')
+            self.set_value(front_pos, state, channels='agent_state', envs=envs)
+
+            self.set_false(self.agent_pos, 'agent_state', envs)
+
+            # move carrying objects
+            is_carrying = envs & self.get_value(self.agent_pos, 'carrying')
+            if np.any(is_carrying):
+                self.set_true(front_pos, 'carrying', envs=is_carrying)
+                self.set_false(self.agent_pos, 'carrying', envs=is_carrying)
+
+                self.set_attr(front_pos, 'carrying_type',
+                              self.get_value(self.agent_pos, 'carrying_type'), envs=is_carrying)
+                self.set_false(self.agent_pos, 'carrying_type', envs=is_carrying)
+
+                self.set_attr(front_pos, 'carrying_color',
+                              self.get_value(self.agent_pos, 'carrying_color'), envs=is_carrying)
+                self.set_false(self.agent_pos, 'carrying_color', envs=is_carrying)
+
+            # update agent's position
+            self.agent_pos[envs] = front_pos[envs]
+
+            # give reward for reaching goal and penalty for stepping into lava
+            is_goal = envs & self.get_value(front_pos, channels='goal')
+            is_lava = envs & self.get_value(front_pos, channels='lava')
+
+            reward[is_goal] = self._win_reward
+            reward[is_lava] = self._lose_reward
+
+            done[is_goal] = True
+            done[is_lava] = True
 
         return reward, done
 
+    @check_if_needed
     def pickup(self, envs):
         front_pos = self.front_pos(self.agent_pos)
         envs = (envs
                 & self.can_pickup(front_pos)
                 & (~self.get_value(front_pos, channels='carrying'))
                 )
+        if np.any(envs):
+            self._toggle_obj_carrying(front_pos, self.agent_pos, envs, from_carrying=False)
 
-        self._toggle_obj_carrying(front_pos, self.agent_pos, envs, from_carrying=False)
-
+    @check_if_needed
     def drop(self, envs):
         front_pos = self.front_pos(self.agent_pos)
         envs = (envs
                 & self.get_value(front_pos, channels='empty')
                 & self.get_value(self.agent_pos, channels='carrying')
                 )
+        if np.any(envs):
+            self._toggle_obj_carrying(self.agent_pos, front_pos, envs, from_carrying=True)
 
-        self._toggle_obj_carrying(self.agent_pos, front_pos, envs, from_carrying=True)
-
+    @check_if_needed
     def toggle(self, envs):
         front_pos = self.front_pos(self.agent_pos)
 
         door = envs & self.get_value(front_pos, channels='door')
 
-        # open closed doors and close opened doors
-        is_open = door & self.get_value(front_pos, channels='open')
-        is_closed = door & self.get_value(front_pos, channels='closed')
-        self.set_attr(front_pos, 'door_state', value='closed', envs=is_open)
-        self.set_attr(front_pos, 'door_state', value='open', envs=is_closed)
+        if np.any(door):
+            # open closed doors and close opened doors
+            is_open = door & self.get_value(front_pos, channels='open')
+            is_closed = door & self.get_value(front_pos, channels='closed')
+            self.set_attr(front_pos, 'door_state', value='closed', envs=is_open)
+            self.set_attr(front_pos, 'door_state', value='open', envs=is_closed)
 
-        # open closed doors if you have the matching color key
-        door_color_channels = np.array([getattr(CH, v) for v in CH.attrs['carrying_color']])
-        door_color = self.get_value(front_pos, channels=door_color_channels)
-        carrying_color = self.get_value(self.agent_pos, channels='carrying_color')
-        matching_key = (
-                self.get_value(self.agent_pos, channels='carrying_key')
-                & (carrying_color == door_color).all(axis=1)
-        )
-        is_locked = np.logical_and(door, self.get_value(front_pos, channels='locked'))
-        self.set_attr(front_pos, 'door_state', value='open',
-                      envs=np.logical_and(is_locked, matching_key))
+            # open closed doors if you have the matching color key
+            door_color_channels = np.array([getattr(CH, v) for v in CH.attrs['carrying_color']])
+            door_color = self.get_value(front_pos, channels=door_color_channels)
+            carrying_color = self.get_value(self.agent_pos, channels='carrying_color')
+            matching_key = (
+                    self.get_value(self.agent_pos, channels='carrying_key')
+                    & (carrying_color == door_color).all(axis=1)
+            )
+            is_locked = np.logical_and(door, self.get_value(front_pos, channels='locked'))
+            self.set_attr(front_pos, 'door_state', value='open',
+                          envs=np.logical_and(is_locked, matching_key))
 
         # replace the box by its contents (can be empty too)
         box = envs & self.get_value(front_pos, channels='box')
-        self._toggle_obj_carrying(front_pos, front_pos, box, from_carrying=True)
+        if np.any(box):
+            self._toggle_obj_carrying(front_pos, front_pos, box, from_carrying=True)
 
     def _toggle_obj_carrying(self, from_pos, to_pos, envs, from_carrying=True):
-        # if from_carrying:
-        #     self.set_false(self.agent_pos, channels='carrying', envs=envs)
-        # else:
-        #     self.set_true(self.agent_pos, channels='carrying', envs=envs)
-
         for kind in ['type', 'color']:
             to_channels = getattr(CH, f'carrying_{kind}')
             from_channels = np.array([getattr(CH, v) for v in CH.attrs[f'carrying_{kind}']])
@@ -720,8 +731,8 @@ class MiniGridEnv(gym.Env):
         p1 = p1.reshape(self.n_envs, 1, 1, self.view_size)
 
         # define visibility
-        self.grid[self._ib, CH.visible] = False
-        self.grid[self._ib, self._ich[:, CH.visible], p0, p1] = True
+        # self.grid[self._ib, CH.visible] = False
+        # self.grid[self._ib, self._ich[:, CH.visible], p0, p1] = True
 
         # get observation slice
         im = self.grid[self._ib, self._ich[:, CH.obs_inds], p0, p1]
