@@ -171,6 +171,7 @@ class MultiRoom(MiniGridEnv):
                  min_num_rooms=6,
                  max_num_rooms=6,
                  max_room_size=10,
+                 max_steps=None,
                  **kwargs
                  ):
         assert min_num_rooms > 0
@@ -182,11 +183,13 @@ class MultiRoom(MiniGridEnv):
         self.max_room_size = max_room_size
 
         self.rooms = []
+        if max_steps is None:
+            max_steps = self.max_num_rooms * 20
 
         super().__init__(
             height=25,
             width=25,
-            max_steps=self.max_num_rooms * 20,
+            max_steps=max_steps,
             **kwargs
         )
 
