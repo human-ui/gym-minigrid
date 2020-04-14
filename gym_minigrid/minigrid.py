@@ -3,7 +3,7 @@ import math, copy, contextlib
 import numpy as np
 import gym
 
-from gym_minigrid import entities, render, encoding, window
+from gym_minigrid import render, encoding, window
 
 
 CH = encoding.Channels()

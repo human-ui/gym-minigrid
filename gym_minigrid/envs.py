@@ -3,7 +3,6 @@ import numpy as np
 import gym
 
 from gym_minigrid.minigrid import MiniGridEnv
-import gym_minigrid.entities as entities
 from gym_minigrid import encoding
 from gym_minigrid.encoding import ATTRS
 

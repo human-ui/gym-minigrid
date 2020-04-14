@@ -1,7 +1,5 @@
 import numpy as np
 
-from gym_minigrid import entities
-
 ATTRS = ('visible',
          'empty',
          {'object_type': ('wall', 'door', 'key', 'ball', 'box', 'goal', 'lava')},
