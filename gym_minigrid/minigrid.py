@@ -458,34 +458,35 @@ class MiniGridEnv(gym.Env):
         self.vert_wall(i, j + width - 1, height)
 
     def is_inside(self, pos):
-        r = np.logical_and(pos[:, 0] >= 0, pos[:, 0] < self.height)
-        c = np.logical_and(pos[:, 1] >= 0, pos[:, 1] < self.width)
-        return np.logical_and(r, c)
+        return ((pos[:, 0] >= 0)
+                & (pos[:, 0] < self.height)
+                & (pos[:, 1] >= 0)
+                & (pos[:, 1] < self.width))
 
     def see_behind(self, pos):
         channels = self.get_value(pos)
-        cannot_see_behind = np.logical_or(
-            channels[:, CH.wall],
-            np.logical_or(
-                np.logical_and(channels[:, CH.door], channels[:, CH.locked]),
-                np.logical_and(channels[:, CH.door], channels[:, CH.closed]),
-            )
+        cannot_see_behind = (
+            channels[:, CH.wall]
+            | (channels[:, CH.door] & channels[:, CH.locked])
+            | (channels[:, CH.door] & channels[:, CH.closed])
         )
-        return np.logical_not(cannot_see_behind)
+        return ~cannot_see_behind
 
     def can_overlap(self, pos):
         channels = self.get_value(pos)
-        can_overlap = np.logical_or(
-            np.logical_and(channels[:, CH.open], channels[:, CH.door]),
-            np.logical_or(channels[:, CH.goal], channels[:, CH.lava])
-        )
+        can_overlap = (channels[:, CH.open]
+                       & channels[:, CH.door]
+                       | channels[:, CH.goal]
+                       | channels[:, CH.lava]
+                       )
         return can_overlap
 
     def can_pickup(self, pos):
         channels = self.get_value(pos)
         # difference from the original MiniGrid:
         # here you are not allowed to pick up boxes as they may contain objects
-        can_pickup = np.logical_or(channels[:, CH.key], channels[:, CH.ball])
+        can_pickup = (channels[:, CH.key] | channels[:, CH.ball]
+                      )
         return can_pickup
 
     def front_pos(self, pos):
@@ -510,8 +511,7 @@ class MiniGridEnv(gym.Env):
     def rotate_left(self, envs):
         rots = []
         for _, this_state in ROTATIONS:
-            sel = np.logical_and(self.get_value(self.agent_pos, this_state),
-                                 envs)
+            sel = envs & self.get_value(self.agent_pos, this_state)
             rots.append(sel)
 
         for (next_state, this_state), sel in zip(ROTATIONS, rots):
@@ -522,8 +522,7 @@ class MiniGridEnv(gym.Env):
 
         rots = []
         for this_state, _ in ROTATIONS:
-            sel = np.logical_and(self.get_value(self.agent_pos, this_state),
-                                 envs)
+            sel = envs & self.get_value(self.agent_pos, this_state)
             rots.append(sel)
 
         for (this_state, next_state), sel in zip(ROTATIONS, rots):
@@ -533,14 +532,10 @@ class MiniGridEnv(gym.Env):
     def move_forward(self, envs):
         front_pos = self.front_pos(self.agent_pos)
 
-        envs = np.logical_and(
-            envs,
-            np.logical_and(
-                self.is_inside(front_pos),
-                np.logical_or(
-                    self.get_value(front_pos, 'empty'),
-                    self.can_overlap(front_pos)),
-            )
+        envs = (
+            envs
+            & self.is_inside(front_pos)
+            & (self.get_value(front_pos, 'empty') | self.can_overlap(front_pos))
             )
 
         self.set_false(self.agent_pos, 'agent_pos', envs)
@@ -552,10 +547,7 @@ class MiniGridEnv(gym.Env):
         self.set_false(self.agent_pos, 'agent_state', envs)
 
         # move carrying objects
-        is_carrying = np.logical_and(
-            envs,
-            self.get_value(self.agent_pos, 'carrying')
-        )
+        is_carrying = envs & self.get_value(self.agent_pos, 'carrying')
         self.set_true(front_pos, 'carrying', envs=is_carrying)
         self.set_false(self.agent_pos, 'carrying', envs=is_carrying)
 
@@ -571,8 +563,8 @@ class MiniGridEnv(gym.Env):
         self.agent_pos[envs] = front_pos[envs]
 
         # give reward for reaching goal and penalty for stepping into lava
-        is_goal = np.logical_and(envs, self.get_value(front_pos, channels='goal'))
-        is_lava = np.logical_and(envs, self.get_value(front_pos, channels='lava'))
+        is_goal = envs & self.get_value(front_pos, channels='goal')
+        is_lava = envs & self.get_value(front_pos, channels='lava')
 
         reward = np.full(self.n_envs, self._step_reward)
         reward[is_goal] = self._win_reward
@@ -586,39 +578,30 @@ class MiniGridEnv(gym.Env):
 
     def pickup(self, envs):
         front_pos = self.front_pos(self.agent_pos)
-        envs = np.logical_and(
-            envs,
-            np.logical_and(
-                self.can_pickup(front_pos),
-                np.logical_not(self.get_value(front_pos, channels='carrying'))
+        envs = (envs
+                & self.can_pickup(front_pos)
+                & (~self.get_value(front_pos, channels='carrying'))
                 )
-        )
 
         self._toggle_obj_carrying(front_pos, self.agent_pos, envs, from_carrying=False)
 
     def drop(self, envs):
         front_pos = self.front_pos(self.agent_pos)
-        envs = np.logical_and(
-            envs,
-            np.logical_and(
-                self.get_value(front_pos, channels='empty'),
-                self.get_value(self.agent_pos, channels='carrying')
+        envs = (envs
+                & self.get_value(front_pos, channels='empty')
+                & self.get_value(self.agent_pos, channels='carrying')
                 )
-        )
 
         self._toggle_obj_carrying(self.agent_pos, front_pos, envs, from_carrying=True)
 
     def toggle(self, envs):
         front_pos = self.front_pos(self.agent_pos)
 
-        door = np.logical_and(
-            envs,
-            self.get_value(front_pos, channels='door')
-        )
+        door = envs & self.get_value(front_pos, channels='door')
 
         # open closed doors and close opened doors
-        is_open = np.logical_and(door, self.get_value(front_pos, channels='open'))
-        is_closed = np.logical_and(door, self.get_value(front_pos, channels='closed'))
+        is_open = door & self.get_value(front_pos, channels='open')
+        is_closed = door & self.get_value(front_pos, channels='closed')
         self.set_attr(front_pos, 'door_state', value='closed', envs=is_open)
         self.set_attr(front_pos, 'door_state', value='open', envs=is_closed)
 
@@ -626,19 +609,16 @@ class MiniGridEnv(gym.Env):
         door_color_channels = np.array([getattr(CH, v) for v in CH.attrs['carrying_color']])
         door_color = self.get_value(front_pos, channels=door_color_channels)
         carrying_color = self.get_value(self.agent_pos, channels='carrying_color')
-        matching_key = np.logical_and(
-                self.get_value(self.agent_pos, channels='carrying_key'),
-                np.all(carrying_color == door_color, axis=1)
+        matching_key = (
+                self.get_value(self.agent_pos, channels='carrying_key')
+                & (carrying_color == door_color).all(axis=1)
         )
         is_locked = np.logical_and(door, self.get_value(front_pos, channels='locked'))
         self.set_attr(front_pos, 'door_state', value='open',
                       envs=np.logical_and(is_locked, matching_key))
 
         # replace the box by its contents (can be empty too)
-        box = np.logical_and(
-            envs,
-            self.get_value(front_pos, channels='box')
-        )
+        box = envs & self.get_value(front_pos, channels='box')
         self._toggle_obj_carrying(front_pos, front_pos, box, from_carrying=True)
 
     def _toggle_obj_carrying(self, from_pos, to_pos, envs, from_carrying=True):
@@ -657,7 +637,7 @@ class MiniGridEnv(gym.Env):
             self.set_false(from_pos, channels=from_channels, envs=envs)
             self.set_value(to_pos, value, channels=to_channels, envs=envs)
 
-        has_object = np.logical_and(envs, value.any(1))
+        has_object = envs & value.any(1)
 
         if from_carrying:
             self.set_false(from_pos, channels='carrying', envs=envs)
@@ -671,15 +651,14 @@ class MiniGridEnv(gym.Env):
     def step(self, action):
         self.step_count += 1
 
-        not_reset = np.logical_and(~self.is_done, self.step_count < self.max_steps)
+        not_reset = (~self.is_done) & (self.step_count < self.max_steps)
         self.reset(envs=~not_reset)
-
-        self.rotate_left(np.logical_and(not_reset, action == 0))
-        self.rotate_right(np.logical_and(not_reset, action == 1))
-        reward, done = self.move_forward(np.logical_and(not_reset, action == 2))
-        self.pickup(np.logical_and(not_reset, action == 3))
-        self.drop(np.logical_and(not_reset, action == 4))
-        self.toggle(np.logical_and(not_reset, action == 5))
+        self.rotate_left(not_reset & (action == 0))
+        self.rotate_right(not_reset & (action == 1))
+        reward, done = self.move_forward(not_reset & (action == 2))
+        self.pickup(not_reset & (action == 3))
+        self.drop(not_reset & (action == 4))
+        self.toggle(not_reset & (action == 5))
 
         self.reward[not_reset] = reward[not_reset]
         self.is_done[not_reset] = done[not_reset]

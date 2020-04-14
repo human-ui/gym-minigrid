@@ -82,7 +82,7 @@ class Test(object):
             assert np.all(agent_state[agent_pos] == 1)
 
             # only the agent and boxes can carry an object
-            can_carry = np.logical_or(agent_pos, grid[:, CH.box])
+            can_carry = agent_pos | grid[:, CH.box]
             assert not np.any(grid[:, CH.carrying][~can_carry])
             carrying = grid[:, CH.carrying]
 
