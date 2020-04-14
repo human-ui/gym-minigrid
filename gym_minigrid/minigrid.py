@@ -161,8 +161,10 @@ class MiniGridEnv(gym.Env):
         self.height = height
         self.width = width
         self.n_envs = n_envs
-        self._ib = torch.arange(self.n_envs, dtype=torch.long, device=device).reshape((-1, 1, 1, 1))  # indices over batch (env) dimension
-        self._ich = torch.arange(len(self.CH), dtype=torch.long, device=device).reshape((1, -1, 1, 1))
+        self._ib_flat = torch.arange(self.n_envs, dtype=torch.long, device=device)
+        self._ib = self._ib_flat.reshape((-1, 1, 1, 1))  # indices over batch (env) dimension
+        self._ich_flat = torch.arange(len(self.CH), dtype=torch.long, device=device)
+        self._ich = self._ich_flat.reshape((1, -1, 1, 1))
         self.view_size = agent_view_size
         self._ivs = torch.arange(self.view_size, dtype=torch.long, device=device)
         self.max_steps = max_steps
@@ -177,7 +179,7 @@ class MiniGridEnv(gym.Env):
 
         # Initialize the state
         self.step_count = torch.zeros(self.n_envs, dtype=torch.long, device=device)
-        self.reward = torch.zeros(self.n_envs, dtype=torch.long, device=device)
+        self.reward = torch.zeros(self.n_envs, dtype=torch.float32, device=device)
         self.reset_mask = torch.zeros(self.n_envs, dtype=bool, device=device)
         self.prepare_reset()
         self.reset()
@@ -211,29 +213,33 @@ class MiniGridEnv(gym.Env):
         # Reset step count and cummulative reward since episode start
         if envs is None:
             envs = torch.ones(self.n_envs, dtype=torch.bool, device=self.device)
-        envs_to_reset = torch.arange(self.n_envs, dtype=torch.long, device=self.device)[envs]
+        envs_to_reset = self._ib_flat[envs]
 
-        # pretend we only have a single environment for now
-        agent_pos = self.agent_pos
-        del self.agent_pos
+        # self.agent_pos = torch.ones((self.n_envs, 2), dtype=torch.long, device=self.device)
+        # self.mission = ''
 
-        n_envs = self.n_envs
-        self.n_envs = 1
+        if True:  # FIXME
+            # pretend we only have a single environment for now
+            agent_pos = self.agent_pos
+            del self.agent_pos
 
-        for i in envs_to_reset:
-            # only update a single env inside self.grid
-            with self.grid.select(i):
-                self.grid.set_empty()
-                self._gen_grid()
+            n_envs = self.n_envs
+            self.n_envs = 1
 
-            new_agent_pos = self.agent_pos
-            if not isinstance(new_agent_pos, torch.Tensor):
-                new_agent_pos = torch.tensor(self.agent_pos, dtype=torch.long, device=self.device)
-            agent_pos[i] = new_agent_pos
+            for i in envs_to_reset:
+                # only update a single env inside self.grid
+                with self.grid.select(i):
+                    self.grid.set_empty()
+                    self._gen_grid()
 
-        # restore the original number of envs
-        self.n_envs = n_envs
-        self.agent_pos = agent_pos
+                new_agent_pos = self.agent_pos
+                if not isinstance(new_agent_pos, torch.Tensor):
+                    new_agent_pos = torch.tensor(self.agent_pos, dtype=torch.long, device=self.device)
+                agent_pos[i] = new_agent_pos
+
+            # restore the original number of envs
+            self.n_envs = n_envs
+            self.agent_pos = agent_pos
 
         # reset state
         self.step_count[envs] = 0
@@ -262,7 +268,8 @@ class MiniGridEnv(gym.Env):
 
     def _get_slice(self, pos, channels=None, envs=None):
         if envs is None:
-            envs = torch.arange(self.n_envs, dtype=torch.long, device=self.device)
+            # envs = torch.arange(self.n_envs, dtype=torch.long, device=self.device)
+            envs = self._ib_flat
 
         if isinstance(channels, str):  # attribute name
             channels = getattr(self.CH, channels)
@@ -593,11 +600,11 @@ class MiniGridEnv(gym.Env):
         is_goal = envs & self.get_value(front_pos, channels='goal')
         is_lava = envs & self.get_value(front_pos, channels='lava')
 
-        reward = torch.full((self.n_envs,), self._step_reward, dtype=torch.long, device=self.device)
+        reward = torch.full((self.n_envs,), self._step_reward, dtype=torch.float32, device=self.device)
         reward[is_goal] = self._win_reward
         reward[is_lava] = self._lose_reward
 
-        done = torch.zeros(self.n_envs, dtype=bool)
+        done = torch.zeros(self.n_envs, dtype=bool, device=self.device)
         done[is_goal] = True
         done[is_lava] = True
 
@@ -679,16 +686,14 @@ class MiniGridEnv(gym.Env):
         self.step_count += 1
 
         not_reset = (~self.is_done) & (self.step_count < self.max_steps)
-        self.reset(envs=~not_reset)
-
+        self.reset(envs=~not_reset)  # FIXME
+        # self.reset(envs=torch.zeros(self.n_envs, dtype=torch.bool, device=self.device))
         self.rotate_left(not_reset & (action == 0))
         self.rotate_right(not_reset & (action == 1))
         reward, done = self.move_forward(not_reset & (action == 2))
         self.pickup(not_reset & (action == 3))
         self.drop(not_reset & (action == 4))
         self.toggle(not_reset & (action == 5))
-
-        self.grid
 
         self.reward[not_reset] = reward[not_reset]
         self.is_done[not_reset] = done[not_reset]
@@ -732,11 +737,8 @@ class MiniGridEnv(gym.Env):
 
         for ori in ['right', 'down', 'left', 'up']:
             envs = self.get_value(self.agent_pos, ori)
-            try:
-                p0[envs] = (self._ivs + top_i[ori][:, None])[envs]
-                p1[envs] = (self._ivs + top_j[ori][:, None])[envs]
-            except:
-                breakpoint()
+            p0[envs] = (self._ivs + top_i[ori][:, None])[envs]
+            p1[envs] = (self._ivs + top_j[ori][:, None])[envs]
         return p0, p1
 
     def get_obs(self, only_image=True):

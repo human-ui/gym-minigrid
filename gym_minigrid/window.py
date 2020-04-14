@@ -77,7 +77,7 @@ class Window(object):
         except ValueError:
             print(f'unknown action {action}')
 
-        actions = torch.repeat_interleaved(torch.tensor(action_idx, dtype=torch.uint8, device=self.env.device), self.env.n_envs)
+        actions = torch.repeat_interleaved(torch.tensor(action_idx, dtype=torch.long, device=self.env.device), self.env.n_envs)
         obs, reward, done, info = self.env.step(actions)
 
         if done[0]:

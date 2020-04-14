@@ -29,7 +29,7 @@ class Test(object):
     def _run_n_steps(self, env, n_steps):
         rng = torch.Generator(device=self.device).manual_seed(0)
         for step in range(n_steps):
-            action = torch.randint(env.action_space.n, size=(env.n_envs,), generator=rng, dtype=torch.uint8, device=self.device)
+            action = torch.randint(env.action_space.n, size=(env.n_envs,), generator=rng, dtype=torch.long, device=self.device)
             obs, reward, done, info = env.step(action)
         return obs, reward, done, info
 
@@ -39,7 +39,7 @@ class Test(object):
 
         for step in range(self.n_steps):
             # Pick a random action
-            action = torch.randint(env.action_space.n, size=(env.n_envs,), generator=rng, dtype=torch.uint8, device=self.device)
+            action = torch.randint(env.action_space.n, size=(env.n_envs,), generator=rng, dtype=torch.long, device=self.device)
             obs, reward, done, info = env.step(action)
 
             # Validate agent position
@@ -123,7 +123,7 @@ class Test(object):
         # prepare a fixed sequence of actions
         # only run for a single episode because the resets will differ
         rng = torch.Generator(device=self.device).manual_seed(0)
-        actions = torch.randint(env_single.action_space.n, size=(self.max_steps - 1, 4), generator=rng, dtype=torch.uint8, device=self.device)
+        actions = torch.randint(env_single.action_space.n, size=(self.max_steps - 1, 4), generator=rng, dtype=torch.long, device=self.device)
 
         for action in actions:
             obs_single, _, _, _ = env_single.step(action[:1])
