@@ -1,4 +1,4 @@
-import sys
+import sys, copy
 import numpy as np
 import gym
 
@@ -11,9 +11,10 @@ CH = encoding.Channels()
 
 class Test(object):
 
-    def __init__(self, env_name, n_envs=4, seed=1337, max_steps=200):
+    def __init__(self, env_name, n_envs=4, n_chars=None, seed=1337, max_steps=200):
         self.env_name = env_name
         self.n_envs = n_envs
+        self.n_chars = len(self.env_name)
         self.seed = seed
         self.max_steps = max_steps
         self.n_steps = int(self.max_steps * 2.5)
@@ -80,19 +81,20 @@ class Test(object):
             assert np.all(agent_state[~agent_pos] == 0)
             assert np.all(agent_state[agent_pos] == 1)
 
-            # can only carry a single object
+            # only the agent and boxes can carry an object
+            can_carry = np.logical_or(agent_pos, grid[:, CH.box])
+            assert not np.any(grid[:, CH.carrying][~can_carry])
             carrying = grid[:, CH.carrying]
-
-            if np.any(carrying):
-                assert carrying == agent_pos
 
             carrying_obj = grid[:, CH.carrying_type].sum(axis=1)
             assert np.all(carrying_obj[carrying] == 1)
             assert np.all(carrying_obj[~carrying] == 0)
+            assert np.all(carrying_obj[~can_carry] == 0)
 
             carrying_color = grid[:, CH.carrying_color].sum(axis=1)
             assert np.all(carrying_color[carrying] == 1)
             assert np.all(carrying_color[~carrying] == 0)
+            assert np.all(carrying_color[~can_carry] == 0)
 
     def test_endpoint(self, n_iters=5):
         """
@@ -117,13 +119,26 @@ class Test(object):
         env_multi.agent_pos[0] = env_single.agent_pos[0]
 
         # prepare a fixed sequence of actions
-        # only run for a single episode because the resets will differ
         rng = np.random.RandomState(0)
-        actions = rng.randint(env_single.action_space.n, size=(self.max_steps - 1, 4))
+        actions = rng.randint(env_single.action_space.n, size=(self.n_steps, 4))
 
         for action in actions:
+            # resets need to be controlled because randomness differs between
+            # the two envs
+            reset = (env_single.is_done
+                     or env_multi.is_done[0]
+                     or (env_single.step_count + 1 >= env_single.max_steps)
+                     or (env_multi.step_count[0] + 1 >= env_multi.max_steps)
+                     )
+            if reset:
+                env_single.reset()
+                env_multi.reset()
+                env_multi.grid._grid[0] = env_single.grid._grid[0]
+                env_multi.agent_pos[0] = env_single.agent_pos[0]
+
             obs_single, _, _, _ = env_single.step(action[:1])
             obs_multi, reward, done, info = env_multi.step(action)
+
             assert np.all(env_single.grid[0] == env_multi.grid[0])
             assert np.all(obs_single[0] == obs_multi[0])
 
@@ -131,17 +146,11 @@ class Test(object):
         """
         Verify that the same seed always produces the same environment
         """
-
         for i in range(0, 5):
             seed = 1337 + i
-
-            env = self._init_env(seed=seed)
-            grid1 = env.grid.copy()
-
-            env = self._init_env(seed=seed)
-            grid2 = env.grid
-
-            assert np.all(grid1 == grid2)
+            env1 = self._init_env(seed=seed)
+            env2 = self._init_env(seed=seed)
+            assert env1 == env2
 
     def test_render(self):
         env = self._init_env()
@@ -153,32 +162,22 @@ class Test(object):
         env = self._init_env()
         env.close()
 
+    def test_all(self):
+        print(f'Testing {self.env_name}:'.ljust(n_chars, ' '), end='', flush=True)
+        for test_name in dir(self):
+            test = getattr(self, test_name)
+            if test_name.startswith('test_') and test_name != 'test_all' and callable(test):
+                test()
+                print('Y', end='', flush=True)
+
+        print()
+
 
 env_list = [e for e in gym.envs.registry.env_specs if e.startswith('MiniGrid')]
 print(f'{len(env_list)} environments registered')
+print()
 
 n_chars = len(max(env_list, key=lambda x: len(x))) + 15
 
 for env_idx, env_name in enumerate(env_list):
-    print(f'- Testing {env_name}:'.ljust(n_chars, ' '), end='', flush=True)
-    test = Test(env_name, n_envs=4)
-
-    test.test_a_few_episodes()
-    print('Y', end='', flush=True)
-
-    test.test_endpoint()
-    print('Y', end='', flush=True)
-
-    test.test_n_envs()
-    print('Y', end='', flush=True)
-
-    test.test_seed()
-    print('Y', end='', flush=True)
-
-    test.test_render()
-    print('Y', end='', flush=True)
-
-    test.test_close()
-    print('Y', end='', flush=True)
-
-    print()
+    Test(env_name, n_envs=4, n_chars=n_chars).test_all()

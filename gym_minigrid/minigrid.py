@@ -3,7 +3,7 @@ import math, copy, contextlib
 import numpy as np
 import gym
 
-from gym_minigrid import render, encoding, window
+from gym_minigrid import encoding, render, window
 
 
 CH = encoding.Channels()
@@ -111,7 +111,7 @@ class MiniGridEnv(gym.Env):
 
         def asarray(self):
             if self._idx is None:
-                pos0 = np.s_[:]
+                pos0 = slice(len(self._grid))
             else:
                 pos0 = self._idx
             return self._grid[pos0, :,
@@ -151,7 +151,9 @@ class MiniGridEnv(gym.Env):
         self.n_envs = n_envs
         # if n_envs == 1:
         #     raise ValueError('MiniGrid only works with more than a single environment')
-        self._ib = np.arange(self.n_envs, dtype=np.intp).reshape((-1, 1, 1, 1))  # indices over batch (env) dimension
+        self._ib_flat = np.arange(self.n_envs)
+
+        self._ib = self._ib_flat.reshape((-1, 1, 1, 1))  # indices over batch (env) dimension
         self._ich = np.arange(len(CH), dtype=np.intp).reshape((1, -1, 1, 1))
         self.view_size = agent_view_size
         self._ivs = np.arange(self.view_size)
@@ -178,7 +180,7 @@ class MiniGridEnv(gym.Env):
         return self.render(mode='ansi')
 
     def __eq__(self, other):
-        return np.array_equal(self.grid, other.grid)
+        return np.array_equal(self.grid._grid, other.grid._grid)
 
     def _gen_grid(self):
         raise NotImplementedError('_gen_grid needs to be implemented by each environment')
@@ -195,13 +197,13 @@ class MiniGridEnv(gym.Env):
         """Put env in is_done state, so that next step will perform reset"""
         self.is_done = np.ones(self.n_envs, dtype=bool)
         # nan so that we wouldn't log cumm_reward=0
-        self.cumm_reward = np.ones(self.n_envs) * np.nan
+        self.cumm_reward = np.full(self.n_envs, np.nan)
 
     def reset(self, envs=None):
         # Reset step count and cummulative reward since episode start
         if envs is None:
             envs = np.ones(self.n_envs, dtype=bool)
-        envs_to_reset = np.arange(self.n_envs)[envs]
+        envs_to_reset = self._ib_flat[envs]
 
         # pretend we only have a single environment for now
         agent_pos = self.agent_pos
@@ -228,6 +230,8 @@ class MiniGridEnv(gym.Env):
         self.reset_mask[envs] = True
         self.cumm_reward[envs] = np.nan
 
+        self.get_obs()  # just to set visibility
+
     def seed(self, seed=0):
         # Seed the random number generator
         self.rng, seed = gym.utils.seeding.np_random(seed)
@@ -235,7 +239,7 @@ class MiniGridEnv(gym.Env):
 
     def _get_slice(self, pos, channels=None, envs=None):
         if envs is None:
-            envs = np.arange(self.n_envs)
+            envs = self._ib_flat
 
         if isinstance(channels, str):  # attribute name
             channels = getattr(CH, channels)
@@ -256,14 +260,14 @@ class MiniGridEnv(gym.Env):
             raise ValueError(f'Position {pos} not understood')
 
         if not isinstance(pos[:, 0], int):
-            p0 = np.array(pos[:, 0]).reshape(-1, 1, 1, 1)
+            p0 = pos[:, 0].reshape(-1, 1, 1, 1)
             if len(p0) == len(envs):
                 p0 = p0[envs]
         else:
             p0 = pos[:, 0]
 
         if not isinstance(pos[:, 1], int):
-            p1 = np.array(pos[:, 1]).reshape(-1, 1, 1, 1)
+            p1 = pos[:, 1].reshape(-1, 1, 1, 1)
             if len(p1) == len(envs):
                 p1 = p1[envs]
         else:
@@ -340,9 +344,15 @@ class MiniGridEnv(gym.Env):
                 state = 'closed'
             self.set_attr(pos, 'door_state', state)
 
-    def set_carrying_obj(self, pos, type_, color='blue'):
-        self.set_attr(pos, 'object_type', type_)
-        self.set_attr(pos, 'object_color', color)
+    def set_carrying_obj(self, pos, type_, color='carrying_blue'):
+        if not type_.startswith('carrying'):
+            type_ = f'carrying_{type_}'
+        if not color.startswith('carrying'):
+            color = f'carrying_{color}'
+
+        self.set_true(pos, 'carrying')
+        self.set_attr(pos, 'carrying_type', type_)
+        self.set_attr(pos, 'carrying_color', color)
 
     def _get_empty_pos(self,
                        top=(0,0),
@@ -375,24 +385,19 @@ class MiniGridEnv(gym.Env):
 
             num_tries += 1
 
-            pos_tmp = np.array([
+            pos_tmp = np.stack([
                 self.rng.randint(top[0], min(top[0] + size[0], self.height), size=self.n_envs),
                 self.rng.randint(top[1], min(top[1] + size[1], self.width), size=self.n_envs)
-            ]).T
+            ], axis=0).T
 
-            # if self.grid._idx == 1:
-            #     breakpoint()
+            # Don't place the object on top of another object
+            # TODO: may want to consider can_overlap and can_contain cases
             envs = self.get_value(pos_tmp, channels='empty')
             pos[envs] = pos_tmp[envs]
             counter += envs.astype(int)
 
             if not np.all(counter > 0):
                 continue
-
-            # Don't place the object on top of another object
-            # TODO: may want to consider can_overlap and can_contain cases
-            # if not self.is_empty(pos):
-            #     continue
 
             # Check if there is a filtering criterion
             if reject_fn is not None and reject_fn(self, pos):
@@ -478,10 +483,9 @@ class MiniGridEnv(gym.Env):
 
     def can_pickup(self, pos):
         channels = self.get_value(pos)
-        can_pickup = np.logical_or(
-            np.logical_or(channels[:, CH.key], channels[:, CH.ball]),
-            channels[:, CH.box]
-        )
+        # difference from the original MiniGrid:
+        # here you are not allowed to pick up boxes as they may contain objects
+        can_pickup = np.logical_or(channels[:, CH.key], channels[:, CH.ball])
         return can_pickup
 
     def front_pos(self, pos):
@@ -564,16 +568,13 @@ class MiniGridEnv(gym.Env):
         self.set_false(self.agent_pos, 'carrying_color', envs=is_carrying)
 
         # update agent's position
-        agent_state = self.get_value(front_pos,'agent_state')[0]
-        if np.sum(agent_state) != 1 and envs[0]:
-            breakpoint()
         self.agent_pos[envs] = front_pos[envs]
 
         # give reward for reaching goal and penalty for stepping into lava
         is_goal = np.logical_and(envs, self.get_value(front_pos, channels='goal'))
         is_lava = np.logical_and(envs, self.get_value(front_pos, channels='lava'))
 
-        reward = np.ones(self.n_envs) * self._step_reward
+        reward = np.full(self.n_envs, self._step_reward)
         reward[is_goal] = self._win_reward
         reward[is_lava] = self._lose_reward
 
@@ -656,12 +657,16 @@ class MiniGridEnv(gym.Env):
             self.set_false(from_pos, channels=from_channels, envs=envs)
             self.set_value(to_pos, value, channels=to_channels, envs=envs)
 
+        has_object = np.logical_and(envs, value.any(1))
+
         if from_carrying:
             self.set_false(from_pos, channels='carrying', envs=envs)
-            self.set_false(to_pos, channels='empty', envs=envs)
+            self.set_true(to_pos, channels='empty', envs=envs)
+            self.set_false(to_pos, channels='empty', envs=has_object)
         else:
             self.set_true(from_pos, channels='empty', envs=envs)
-            self.set_true(to_pos, channels='carrying', envs=envs)
+            self.set_false(to_pos, channels='carrying', envs=envs)
+            self.set_true(to_pos, channels='carrying', envs=has_object)
 
     def step(self, action):
         self.step_count += 1
@@ -732,12 +737,44 @@ class MiniGridEnv(gym.Env):
 
         # take a slice of the environment within agent's view size
         p0, p1 = self.view_box()
-        im = self.grid[
-            self._ib,
-            self._ich[:, CH.obs_inds],
-            p0.reshape(self.n_envs, 1, self.view_size, 1),
-            p1.reshape(self.n_envs, 1, 1, self.view_size)
-            ]
+        p0 = p0.reshape(self.n_envs, 1, self.view_size, 1)
+        p1 = p1.reshape(self.n_envs, 1, 1, self.view_size)
+
+        # define visibility
+        self.grid[self._ib, CH.visible] = False
+        self.grid[self._ib, self._ich[:, CH.visible], p0, p1] = True
+
+        # get observation slice
+        im = self.grid[self._ib, self._ich[:, CH.obs_inds], p0, p1]
+
+        # im = self.grid[
+        #     self._ib,
+        #     self._ich[:, CH.obs_inds],
+        #     p0.reshape(self.n_envs, 1, self.view_size, 1),
+        #     p1.reshape(self.n_envs, 1, 1, self.view_size)
+        #     ]
+
+        # for grid, agent_pos in enumerate(zip(self.grid, self.agent_pos)):
+        #     i, j = agent_pos
+        #     breakpoint()
+        #     top_i = {
+        #         'right': i - vs // 2,
+        #         'down': i,
+        #         'left': i - vs // 2,
+        #         'up': i - vs + 1
+        #     }
+        #     top_j = {
+        #         'right': j,
+        #         'down': j - vs // 2,
+        #         'left': j - vs + 1,
+        #         'up': j - vs // 2
+        #     }
+
+        #     self.get_value(self.agent_pos, , envs=)
+        #     for ori in ['right', 'down', 'left', 'up']:
+        #         envs = self.get_value(self.agent_pos, ori)
+        #         p0[envs] = (self._ivs + top_i[ori][:, None])[envs]
+        #         p1[envs] = (self._ivs + top_j[ori][:, None])[envs]
 
         # orient agent upright
         for k, (state, _) in enumerate(ROTATIONS):

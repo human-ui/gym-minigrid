@@ -4,7 +4,6 @@ import gym
 
 from gym_minigrid.minigrid import MiniGridEnv
 from gym_minigrid import encoding
-from gym_minigrid.encoding import ATTRS
 
 CH = encoding.Channels()
 
@@ -131,7 +130,7 @@ class MultiRoom(MiniGridEnv):
         self.rooms = []
 
         super().__init__(
-            height=height,  # TODO
+            height=height,
             width=width,
             max_steps=max_steps,
             **kwargs
@@ -144,8 +143,8 @@ class MultiRoom(MiniGridEnv):
             cur_room_list = []
 
             entry_door_pos = (
-                self.rng.randint(0, self.height - 2),
-                self.rng.randint(0, self.width - 2)
+                self.rng.randint(self.height - 2),
+                self.rng.randint(self.width - 2)
             )
 
             # Recursively place the rooms

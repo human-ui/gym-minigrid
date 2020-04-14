@@ -9,9 +9,8 @@ from matplotlib.collections import PatchCollection
 from matplotlib.transforms import Affine2D
 import matplotlib.pyplot as plt
 
-from gym_minigrid import window
-import gym_minigrid.encoding
-CH = gym_minigrid.encoding.Channels()
+from gym_minigrid import window, encoding
+CH = encoding.Channels()
 
 
 class Render(object):

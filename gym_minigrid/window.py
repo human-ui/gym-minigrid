@@ -77,7 +77,8 @@ class Window(object):
         except ValueError:
             print(f'unknown action {action}')
 
-        obs, reward, done, info = self.env.step(np.repeat(action_idx, self.env.n_envs))
+        actions = np.repeat(action_idx, self.env.n_envs)
+        obs, reward, done, info = self.env.step(actions)
 
         if done[0]:
             self.env.reset()
