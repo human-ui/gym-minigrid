@@ -16,7 +16,7 @@ SKIP = ('agent_pos', 'right', 'down', 'left', 'up')
 
 class Channels(object):
 
-    def __init__(self):
+    def __init__(self, observation=False):
         """
         Gives access to:
         - Indices of every attribute: Channels.wall -> 2, Channels.visible -> 0
@@ -29,27 +29,31 @@ class Channels(object):
         for attr in ATTRS:
             if isinstance(attr, dict):
                 key = list(attr.keys())[0]
-                values = list(attr.values())[0]
-                inds = {v: i + count for i,v in enumerate(values)}
-                # if indices_only:
-                inds = np.arange(count, count + len(values))
+                values = attr[key]
+                if observation:
+                    values = [v for v in values if v not in SKIP]
 
-                for ind, value in zip(inds, values):
-                    if key.startswith('carrying'):
-                        k = f'carrying_{value}'
-                    else:
-                        k = value
-                    setattr(self, k, ind)
-                    self.inds[k] = ind
+                if len(values) > 0:
+                    inds = {v: i + count for i,v in enumerate(values)}
+                    inds = np.arange(count, count + len(values))
 
-                self.attrs[key] = values
-                count += len(values)
+                    for ind, value in zip(inds, values):
+                        if key.startswith('carrying'):
+                            k = f'carrying_{value}'
+                        else:
+                            k = value
+                        setattr(self, k, ind)
+                        self.inds[k] = ind
+
+                    self.attrs[key] = values
+                    count += len(values)
 
             else:
-                key = attr
-                inds = count
-                self.inds[key] = count
-                count += 1
+                if not observation or (observation and attr not in SKIP):
+                    key = attr
+                    inds = count
+                    self.inds[key] = count
+                    count += 1
 
             setattr(self, key, inds)  # ugly but gives fast access
 
