@@ -223,8 +223,8 @@ class MiniGridEnv(gym.Env):
                 self.grid.set_empty()
                 self._gen_grid()
                 # set up initial visibility
-                p0, p1 = self.view_box(0)
-                self.grid[0, CH.visible, p0, p1] = True
+                p0, p1 = self.view_box(0, padded=True)
+                self.grid._grid[0, CH.visible, p0, p1] = True
             agent_pos[i] = self.agent_pos
 
         # restore the original number of envs
@@ -688,7 +688,7 @@ class MiniGridEnv(gym.Env):
     def visible(self):
         return self.view_box()
 
-    def view_box(self, env_idx):
+    def view_box(self, env_idx, padded=False):
         """
         Get the extents of the square set of tiles visible to the agent
         Note: the bottom extent indices are not included in the set
@@ -711,8 +711,10 @@ class MiniGridEnv(gym.Env):
 
         state_idx = np.argmax(self.grid[env_idx, CH.agent_state, i, j])
         state = CH.attrs['agent_state'][state_idx]
-        p0 = slice(top_i[state], top_i[state] + vs)
-        p1 = slice(top_j[state], top_j[state] + vs)
+        padding = self.grid.padding if padded else 0
+
+        p0 = slice(top_i[state] + padding, top_i[state] + vs + padding)
+        p1 = slice(top_j[state] + padding, top_j[state] + vs + padding)
         return p0, p1
 
     def get_obs(self, only_image=True):
@@ -728,10 +730,7 @@ class MiniGridEnv(gym.Env):
         # advanced indexing is slow, thus we iterate over envs and slice
         grid_obs = self.grid[:, CH.obs_inds]
         for env_idx in range(self.n_envs):
-            p0, p1 = self.view_box(env_idx)
-            # add padding since grid_obs is not of type Grid
-            p0 = slice(p0.start + self.grid.padding, p0.stop + self.grid.padding)
-            p1 = slice(p1.start + self.grid.padding, p1.stop + self.grid.padding)
+            p0, p1 = self.view_box(env_idx, padded=True)
             im[env_idx] = grid_obs[env_idx, :, p0, p1]
             # update visibility
             self.grid._grid[env_idx, CH.visible, p0, p1] = True
