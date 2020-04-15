@@ -105,6 +105,7 @@ class MiniGridEnv(gym.Env):
                     p3 = idx[3] + self.padding
                     pos = (pos0, idx[1], p2, p3)
                 return pos
+
             elif len(idx) == 1:
                 return (pos0,)
             elif len(idx) == 2:
@@ -120,7 +121,7 @@ class MiniGridEnv(gym.Env):
             if self._idx is None:
                 pos0 = slice(len(self._grid))
             else:
-                pos0 = self._idx
+                pos0 = slice(self._idx, self._idx + 1)  # so that dims remains intact
             return self._grid[pos0, :,
                               self.padding: self.padding + self.height,
                               self.padding: self.padding + self.width]
@@ -221,6 +222,9 @@ class MiniGridEnv(gym.Env):
             with self.grid.select(i):
                 self.grid.set_empty()
                 self._gen_grid()
+                # set up initial visibility
+                p0, p1 = self.view_box(0)
+                self.grid[0, CH.visible, p0, p1] = True
             agent_pos[i] = self.agent_pos
 
         # restore the original number of envs
@@ -233,8 +237,6 @@ class MiniGridEnv(gym.Env):
         self.is_done[envs] = False
         self.reset_mask[envs] = True
         self.cumm_reward[envs] = np.nan
-
-        # self.get_obs()  # just to set visibility
 
     def seed(self, seed=0):
         # Seed the random number generator
@@ -686,23 +688,19 @@ class MiniGridEnv(gym.Env):
     def visible(self):
         return self.view_box()
 
-    def view_box(self):
+    def view_box(self, env_idx):
         """
         Get the extents of the square set of tiles visible to the agent
         Note: the bottom extent indices are not included in the set
         """
+        i, j = self.agent_pos[env_idx]
         vs = self.view_size
 
-        p0 = np.zeros((self.n_envs, vs), dtype=np.intp)
-        p1 = np.zeros((self.n_envs, vs), dtype=np.intp)
-
-        i, j = self.agent_pos.T
-
         top_i = {
-            'right': i - vs // 2,
-            'down': i,
-            'left': i - vs // 2,
-            'up': i - vs + 1
+                'right': i - vs // 2,
+                'down': i,
+                'left': i - vs // 2,
+                'up': i - vs + 1
         }
         top_j = {
             'right': j,
@@ -711,10 +709,10 @@ class MiniGridEnv(gym.Env):
             'up': j - vs // 2
         }
 
-        for ori in ['right', 'down', 'left', 'up']:
-            envs = self.get_value(self.agent_pos, ori)
-            p0[envs] = (self._ivs + top_i[ori][:, None])[envs]
-            p1[envs] = (self._ivs + top_j[ori][:, None])[envs]
+        state_idx = np.argmax(self.grid[env_idx, CH.agent_state, i, j])
+        state = CH.attrs['agent_state'][state_idx]
+        p0 = slice(top_i[state], top_i[state] + vs)
+        p1 = slice(top_j[state], top_j[state] + vs)
         return p0, p1
 
     def get_obs(self, only_image=True):
@@ -725,46 +723,21 @@ class MiniGridEnv(gym.Env):
         if not hasattr(self, 'mission'):
             raise AttributeError('environments must define a textual mission string')
 
-        # take a slice of the environment within agent's view size
-        p0, p1 = self.view_box()
-        p0 = p0.reshape(self.n_envs, 1, self.view_size, 1)
-        p1 = p1.reshape(self.n_envs, 1, 1, self.view_size)
+        im = np.zeros((self.n_envs, len(CH.obs_inds), self.view_size, self.view_size), dtype=bool)
 
-        # define visibility
-        # self.grid[self._ib, CH.visible] = False
-        # self.grid[self._ib, self._ich[:, CH.visible], p0, p1] = True
+        # advanced indexing is slow, thus we iterate over envs and slice
+        grid_obs = self.grid[:, CH.obs_inds]
+        for env_idx in range(self.n_envs):
+            p0, p1 = self.view_box(env_idx)
+            # add padding since grid_obs is not of type Grid
+            p0 = slice(p0.start + self.grid.padding, p0.stop + self.grid.padding)
+            p1 = slice(p1.start + self.grid.padding, p1.stop + self.grid.padding)
+            im[env_idx] = grid_obs[env_idx, :, p0, p1]
+            # update visibility
+            self.grid._grid[env_idx, CH.visible, p0, p1] = True
 
-        # get observation slice
-        im = self.grid[self._ib, self._ich[:, CH.obs_inds], p0, p1]
-
-        # im = self.grid[
-        #     self._ib,
-        #     self._ich[:, CH.obs_inds],
-        #     p0.reshape(self.n_envs, 1, self.view_size, 1),
-        #     p1.reshape(self.n_envs, 1, 1, self.view_size)
-        #     ]
-
-        # for grid, agent_pos in enumerate(zip(self.grid, self.agent_pos)):
-        #     i, j = agent_pos
-        #     breakpoint()
-        #     top_i = {
-        #         'right': i - vs // 2,
-        #         'down': i,
-        #         'left': i - vs // 2,
-        #         'up': i - vs + 1
-        #     }
-        #     top_j = {
-        #         'right': j,
-        #         'down': j - vs // 2,
-        #         'left': j - vs + 1,
-        #         'up': j - vs // 2
-        #     }
-
-        #     self.get_value(self.agent_pos, , envs=)
-        #     for ori in ['right', 'down', 'left', 'up']:
-        #         envs = self.get_value(self.agent_pos, ori)
-        #         p0[envs] = (self._ivs + top_i[ori][:, None])[envs]
-        #         p1[envs] = (self._ivs + top_j[ori][:, None])[envs]
+        # update visibility on obs
+        im[:, CH.visible] = True
 
         # orient agent upright
         for k, (state, _) in enumerate(ROTATIONS):
