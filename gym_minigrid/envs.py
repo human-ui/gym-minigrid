@@ -1328,7 +1328,7 @@ class ObstructedMaze_Full(_ObstructedMaze):
                               key_in_box=self.key_in_box,
                               blocked=self.blocked)
 
-        corners = [(2, 0), (2, 2), (0, 2), (0, 0)]
+        corners = [(0, 2), (2, 2), (2, 0), (0, 0)]
         ball_room = corners[self.rng.randint(self.num_quarters)]
 
         self.obj = self.add_object(*ball_room, 'ball', color=self.ball_to_find_color)
